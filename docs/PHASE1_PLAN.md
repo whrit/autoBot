@@ -170,13 +170,13 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 | **Est. Hours** | 60-80 |
 
 **Key Deliverables:**
-- [ ] Full CRUD for all registry tables (strategies, artifacts, runs, gates, promotions)
-- [ ] Dataset snapshot management
+- [x] Full CRUD for all registry tables (strategies, artifacts, runs, gates, promotions)
+- [x] Dataset snapshot management
 - [ ] Feature schema versioning
-- [ ] Artifact upload/download (JSON + ONNX)
-- [ ] Gate evaluation endpoints
-- [ ] Promotion state management (candidate → shadow → paper)
-- [ ] Audit log recording
+- [x] Artifact upload/download (JSON + ONNX)
+- [x] Gate evaluation endpoints
+- [x] Promotion state management (candidate → shadow → paper)
+- [x] Audit log recording
 - [ ] GPU training metadata storage
 
 **Dependencies:** PostgreSQL, MinIO, common_types
@@ -313,18 +313,18 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 
 | Task ID | Task | Est. Hrs | Deps | Status |
 |---------|------|----------|------|--------|
-| T5.01 | registry: Expand FastAPI endpoints (CRUD) | 16 | M4 | [ ] |
-| T5.02 | registry: Dataset snapshot management | 8 | T5.01 | [ ] |
-| T5.03 | registry: Artifact upload/download | 10 | T5.02 | [ ] |
-| T5.04 | registry: Gate evaluation endpoints | 10 | T5.03 | [ ] |
-| T5.05 | registry: Promotion state machine | 8 | T5.04 | [ ] |
-| T5.06 | registry: Audit log implementation | 6 | T5.05 | [ ] |
-| T5.07 | monitor: Feed health monitoring | 8 | T1.09 | [ ] |
-| T5.08 | monitor: Slippage tracking | 8 | T5.05 | [ ] |
-| T5.09 | monitor: Drawdown alerts | 6 | T5.08 | [ ] |
-| T5.10 | monitor: Prometheus metrics export | 8 | T5.09 | [ ] |
-| T5.11 | monitor: Rollback trigger logic | 8 | T5.10 | [ ] |
-| T5.12 | Integration tests (registry + monitor) | 4 | T5.11 | [ ] |
+| T5.01 | registry: Expand FastAPI endpoints (CRUD) | 16 | M4 | [x] |
+| T5.02 | registry: Dataset snapshot management | 8 | T5.01 | [x] |
+| T5.03 | registry: Artifact upload/download | 10 | T5.02 | [x] |
+| T5.04 | registry: Gate evaluation endpoints | 10 | T5.03 | [x] |
+| T5.05 | registry: Promotion state machine | 8 | T5.04 | [x] |
+| T5.06 | registry: Audit log implementation | 6 | T5.05 | [x] |
+| T5.07 | monitor: Feed health monitoring | 8 | T1.09 | [x] |
+| T5.08 | monitor: Slippage tracking | 8 | T5.05 | [x] |
+| T5.09 | monitor: Drawdown alerts | 6 | T5.08 | [x] |
+| T5.10 | monitor: Prometheus metrics export | 8 | T5.09 | [x] |
+| T5.11 | monitor: Rollback trigger logic | 8 | T5.10 | [x] |
+| T5.12 | Integration tests (registry + monitor) | 4 | T5.11 | [x] |
 
 **Milestone M5:** Registry fully operational, monitoring active
 
@@ -399,18 +399,18 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 | T4.10 | Cost sensitivity tests | optimizer | S4 | 8 | T4.09 | [x] |
 | T4.11 | Optimizer tests | optimizer | S4 | 6 | T4.10 | [x] |
 | T4.12 | GPU metadata logging | optimizer | S4 | 6 | T4.06 | [x] |
-| T5.01 | Registry CRUD endpoints | registry_api | S5 | 16 | M4 | [ ] |
-| T5.02 | Dataset snapshots | registry_api | S5 | 8 | T5.01 | [ ] |
-| T5.03 | Artifact upload/download | registry_api | S5 | 10 | T5.02 | [ ] |
-| T5.04 | Gate evaluation | registry_api | S5 | 10 | T5.03 | [ ] |
-| T5.05 | Promotion state machine | registry_api | S5 | 8 | T5.04 | [ ] |
-| T5.06 | Audit log | registry_api | S5 | 6 | T5.05 | [ ] |
-| T5.07 | Feed health monitoring | monitor | S5 | 8 | T1.09 | [ ] |
-| T5.08 | Slippage tracking | monitor | S5 | 8 | T5.05 | [ ] |
-| T5.09 | Drawdown alerts | monitor | S5 | 6 | T5.08 | [ ] |
-| T5.10 | Prometheus metrics | monitor | S5 | 8 | T5.09 | [ ] |
-| T5.11 | Rollback triggers | monitor | S5 | 8 | T5.10 | [ ] |
-| T5.12 | Registry/monitor tests | monitor | S5 | 4 | T5.11 | [ ] |
+| T5.01 | Registry CRUD endpoints | registry_api | S5 | 16 | M4 | [x] |
+| T5.02 | Dataset snapshots | registry_api | S5 | 8 | T5.01 | [x] |
+| T5.03 | Artifact upload/download | registry_api | S5 | 10 | T5.02 | [x] |
+| T5.04 | Gate evaluation | registry_api | S5 | 10 | T5.03 | [x] |
+| T5.05 | Promotion state machine | registry_api | S5 | 8 | T5.04 | [x] |
+| T5.06 | Audit log | registry_api | S5 | 6 | T5.05 | [x] |
+| T5.07 | Feed health monitoring | monitor | S5 | 8 | T1.09 | [x] |
+| T5.08 | Slippage tracking | monitor | S5 | 8 | T5.05 | [x] |
+| T5.09 | Drawdown alerts | monitor | S5 | 6 | T5.08 | [x] |
+| T5.10 | Prometheus metrics | monitor | S5 | 8 | T5.09 | [x] |
+| T5.11 | Rollback triggers | monitor | S5 | 8 | T5.10 | [x] |
+| T5.12 | Registry/monitor tests | monitor | S5 | 4 | T5.11 | [x] |
 | T6.01 | Shadow execution mode | runner | S6 | 16 | M5 | [ ] |
 | T6.02 | Signal logging | runner | S6 | 8 | T6.01 | [ ] |
 | T6.03 | Paper execution | runner | S6 | 16 | T6.02 | [ ] |
