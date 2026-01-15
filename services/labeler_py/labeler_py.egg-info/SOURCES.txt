@@ -1,0 +1,12 @@
+pyproject.toml
+labeler_py/__init__.py
+labeler_py/labels.py
+labeler_py/main.py
+labeler_py/net_returns.py
+labeler_py/returns.py
+labeler_py.egg-info/PKG-INFO
+labeler_py.egg-info/SOURCES.txt
+labeler_py.egg-info/dependency_links.txt
+labeler_py.egg-info/requires.txt
+labeler_py.egg-info/top_level.txt
+tests/test_labeler.py

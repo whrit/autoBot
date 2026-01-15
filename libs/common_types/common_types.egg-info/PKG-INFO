@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: common_types
+Version: 0.1.0
+Summary: Common Pydantic models for the Autonomous Equities Trading Engine
+Requires-Python: >=3.12
+Requires-Dist: pydantic>=2.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: mypy>=1.8.0; extra == "dev"
+Requires-Dist: ruff>=0.2.0; extra == "dev"

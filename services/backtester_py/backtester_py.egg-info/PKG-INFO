@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: backtester_py
+Version: 0.1.0
+Requires-Python: >=3.12
+Requires-Dist: polars>=1.0.0
+Requires-Dist: numpy>=2.0.0
+Requires-Dist: scipy>=1.11.0
+Requires-Dist: cost-models
+Requires-Dist: risk-models
+Requires-Dist: common-types
+Requires-Dist: feature-builder-py
+Requires-Dist: labeler-py

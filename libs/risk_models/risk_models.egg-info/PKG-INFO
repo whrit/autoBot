@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: risk_models
+Version: 0.1.0
+Summary: Risk management models for position limits, exposure management, and risk checks
+Requires-Python: >=3.12
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: mypy>=1.8; extra == "dev"
+Requires-Dist: ruff>=0.3; extra == "dev"

@@ -2,7 +2,50 @@
 name = "backtester_py"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "polars>=1.0.0",
+    "numpy>=2.0.0",
+    "scipy>=1.11.0",
+    "cost-models",
+    "risk-models",
+    "common-types",
+    "feature-builder-py",
+    "labeler-py",
+]
 
 [tool.uv]
 package = true
+
+[tool.uv.sources]
+cost-models = { workspace = true }
+risk-models = { workspace = true }
+common-types = { workspace = true }
+feature-builder-py = { workspace = true }
+labeler-py = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+# Ignore missing imports for workspace packages and scipy stubs
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

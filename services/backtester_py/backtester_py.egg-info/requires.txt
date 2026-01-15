@@ -1,0 +1,8 @@
+polars>=1.0.0
+numpy>=2.0.0
+scipy>=1.11.0
+cost-models
+risk-models
+common-types
+feature-builder-py
+labeler-py

@@ -120,13 +120,13 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 | **Est. Hours** | 80-100 |
 
 **Key Deliverables:**
-- [ ] Quote-based fill simulation (buy @ ask + slippage, sell @ bid - slippage)
-- [ ] Slippage model: `slippage_bps = a*spread + b*(order/book) + c*vol`
-- [ ] Transaction cost modeling
-- [ ] Position limits + stop logic
-- [ ] Walk-forward evaluation framework
-- [ ] Regime-sliced evaluation (volatility, liquidity, trend buckets)
-- [ ] Metrics computation (Sharpe, Sortino, MDD, profit factor, win rate)
+- [x] Quote-based fill simulation (buy @ ask + slippage, sell @ bid - slippage)
+- [x] Slippage model: `slippage_bps = a*spread + b*(order/book) + c*vol`
+- [x] Transaction cost modeling
+- [x] Position limits + stop logic
+- [x] Walk-forward evaluation framework
+- [x] Regime-sliced evaluation (volatility, liquidity, trend buckets)
+- [x] Metrics computation (Sharpe, Sortino, MDD, profit factor, win rate)
 
 **Dependencies:** feature_builder_py, labeler_py, cost_models, risk_models
 
@@ -269,16 +269,16 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 
 | Task ID | Task | Est. Hrs | Deps | Status |
 |---------|------|----------|------|--------|
-| T3.01 | backtester: Core simulation loop | 16 | T2.04 | [ ] |
-| T3.02 | backtester: Quote-based fill logic | 12 | T3.01 | [ ] |
-| T3.03 | backtester: Slippage model integration | 8 | T3.02, T1.04 | [ ] |
-| T3.04 | backtester: Position limits + stops | 8 | T3.03 | [ ] |
-| T3.05 | backtester: Walk-forward framework | 12 | T3.04 | [ ] |
-| T3.06 | backtester: Metrics computation | 10 | T3.05 | [ ] |
-| T3.07 | backtester: Regime slicing (vol, liquidity, trend) | 12 | T3.06 | [ ] |
-| T3.08 | backtester: Purged CV implementation | 10 | T3.07 | [ ] |
-| T3.09 | Integration tests (feature → backtest) | 8 | T3.08 | [ ] |
-| T3.10 | Backtest validation vs provider bars | 4 | T3.09 | [ ] |
+| T3.01 | backtester: Core simulation loop | 16 | T2.04 | [x] |
+| T3.02 | backtester: Quote-based fill logic | 12 | T3.01 | [x] |
+| T3.03 | backtester: Slippage model integration | 8 | T3.02, T1.04 | [x] |
+| T3.04 | backtester: Position limits + stops | 8 | T3.03 | [x] |
+| T3.05 | backtester: Walk-forward framework | 12 | T3.04 | [x] |
+| T3.06 | backtester: Metrics computation | 10 | T3.05 | [x] |
+| T3.07 | backtester: Regime slicing (vol, liquidity, trend) | 12 | T3.06 | [x] |
+| T3.08 | backtester: Purged CV implementation | 10 | T3.07 | [x] |
+| T3.09 | Integration tests (feature → backtest) | 8 | T3.08 | [x] |
+| T3.10 | Backtest validation vs provider bars | 4 | T3.09 | [x] |
 
 **Milestone M3:** Backtester produces realistic metrics
 
@@ -377,16 +377,16 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 | T2.08 | Net-of-spread returns | labeler | S2 | 4 | T2.07 | [x] |
 | T2.09 | Feature builder tests | feature_builder | S2 | 4 | T2.05 | [x] |
 | T2.10 | Labeler tests | labeler | S2 | 2 | T2.08 | [x] |
-| T3.01 | Core simulation loop | backtester | S3 | 16 | T2.04 | [ ] |
-| T3.02 | Quote-based fills | backtester | S3 | 12 | T3.01 | [ ] |
-| T3.03 | Slippage model | backtester | S3 | 8 | T3.02,T1.04 | [ ] |
-| T3.04 | Position limits | backtester | S3 | 8 | T3.03 | [ ] |
-| T3.05 | Walk-forward framework | backtester | S3 | 12 | T3.04 | [ ] |
-| T3.06 | Metrics computation | backtester | S3 | 10 | T3.05 | [ ] |
-| T3.07 | Regime slicing | backtester | S3 | 12 | T3.06 | [ ] |
-| T3.08 | Purged CV | backtester | S3 | 10 | T3.07 | [ ] |
-| T3.09 | Integration tests | backtester | S3 | 8 | T3.08 | [ ] |
-| T3.10 | Validation vs provider | backtester | S3 | 4 | T3.09 | [ ] |
+| T3.01 | Core simulation loop | backtester | S3 | 16 | T2.04 | [x] |
+| T3.02 | Quote-based fills | backtester | S3 | 12 | T3.01 | [x] |
+| T3.03 | Slippage model | backtester | S3 | 8 | T3.02,T1.04 | [x] |
+| T3.04 | Position limits | backtester | S3 | 8 | T3.03 | [x] |
+| T3.05 | Walk-forward framework | backtester | S3 | 12 | T3.04 | [x] |
+| T3.06 | Metrics computation | backtester | S3 | 10 | T3.05 | [x] |
+| T3.07 | Regime slicing | backtester | S3 | 12 | T3.06 | [x] |
+| T3.08 | Purged CV | backtester | S3 | 10 | T3.07 | [x] |
+| T3.09 | Integration tests | backtester | S3 | 8 | T3.08 | [x] |
+| T3.10 | Validation vs provider | backtester | S3 | 4 | T3.09 | [x] |
 | T4.01 | Strategy family framework | optimizer | S4 | 12 | T3.08 | [ ] |
 | T4.02 | Trend strategy | optimizer | S4 | 10 | T4.01 | [ ] |
 | T4.03 | Mean-reversion strategy | optimizer | S4 | 10 | T4.01 | [ ] |
