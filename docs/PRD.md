@@ -2,7 +2,7 @@
 
 # PRD.md — Autonomous Equities Taker Trading Engine
 
-**Alpaca • Multi-Timeframe • Microstructure-Aware • Strategy-Library + Regime Allocation**
+**Alpaca • Multi-TimeFrame • Microstructure-Aware • Strategy-Library + Regime Allocation • CUDA GPU Acceleration where applicable**
 
 ---
 
@@ -14,7 +14,11 @@ Build a **production-grade autonomous equities taker engine** that continuously:
 
 The system is **self-iterating**, **policy-bounded**, and **audit-safe**.
 
-This PRD covers **all three phases**, with **quotes + trades ingestion from Day 1** and a **multi-strategy, regime-aware allocator** as the end state.
+This PRD covers **all three phases**, with:
+
+- **quotes + trades ingestion from Day 1**
+- a **multi-strategy, regime-aware allocator** as the end state
+- **CUDA GPU acceleration for ML training and large candidate sweeps where applicable**, with mandatory CPU fallback.
 
 ---
 
@@ -22,51 +26,64 @@ This PRD covers **all three phases**, with **quotes + trades ingestion from Day 
 
 ### 2.1 Reproducibility
 
-* Same code + same data snapshot ⇒ identical results
-* All backtests reference immutable dataset versions
+- Same code + same data snapshot ⇒ identical results
+- All backtests reference immutable dataset versions
+- GPU runs must record:
+  - device (`cpu|cuda`)
+  - backend (`xgboost_gpu|pytorch_cuda|cpu`)
+  - CUDA/driver versions
+  - seeds and determinism flags
 
 ### 2.2 No Leakage
 
-* All joins are **as-of**
-* Features’ end timestamps ≤ decision timestamps
-* Corporate actions applied before feature generation
+- All joins are **as-of**
+- Features’ end timestamps ≤ decision timestamps
+- Corporate actions applied before feature generation
 
 ### 2.3 Realistic Taker Execution
 
-* Quote-based fills (bid/ask)
-* Slippage depends on spread, volatility, depth
-* No mid-price fantasy fills
+- Quote-based fills (bid/ask)
+- Slippage depends on spread, volatility, depth
+- No mid-price fantasy fills
 
 ### 2.4 Safety & Governance
 
-* Shadow → Paper → Canary → Full promotion
-* Automated rollback
-* Full audit trail
+- Shadow → Paper → Canary → Full promotion
+- Automated rollback
+- Full audit trail (including GPU training/inference metadata)
 
 ---
 
 ## 3. Phase Overview
 
-### Phase 1 — Python-First Autonomous Loop
+### Phase 1 — Python-First Autonomous Loop (GPU training optional)
 
-* Ingest **trades + quotes**
-* Build **microstructure-aware bars**
-* Run **multi-strategy library**
-* Decisions on **1-minute clock**
-* Shadow + paper only
+- Ingest **trades + quotes**
+- Build **microstructure-aware bars**
+- Run **multi-strategy library**
+- Decisions on **1-minute clock**
+- Shadow + paper only
+- GPU acceleration used primarily for:
+  - ML model training during candidate sweeps (e.g., XGBoost GPU)
+  - (Optional) ML inference for heavy models (usually not needed in Phase 1)
 
 ### Phase 2 — Rust Execution Runtime
 
-* Rust execution engine
-* Live trading + strict risk checks
-* Python remains research/control plane
+- Rust execution engine
+- Live trading + strict risk checks
+- Python remains research/control plane
+- Optional GPU inference support for ONNX (only if warranted)
 
 ### Phase 3 — Strategy Factory + Regime Allocation
 
-* Multiple concurrent strategies
-* Regime classifier
-* Capital allocator
-* Tick/L2-ready ingestion
+- Multiple concurrent strategies
+- Regime classifier
+- Capital allocator
+- Tick/L2-ready ingestion
+- GPU acceleration increasingly valuable for:
+  - large-scale ML sweeps
+  - more complex models (neural nets)
+  - high-throughput research runs
 
 ---
 
@@ -74,20 +91,20 @@ This PRD covers **all three phases**, with **quotes + trades ingestion from Day 
 
 ### Services
 
-* `ingestor_py`
-* `feature_builder_py`
-* `labeler_py`
-* `backtester_py`
-* `optimizer_py`
-* `registry_api_py`
-* `monitor_py`
-* `execution_engine_rs` (Phase 2+)
+- `ingestor_py`
+- `feature_builder_py`
+- `labeler_py`
+- `backtester_py`
+- `optimizer_py`
+- `registry_api_py`
+- `monitor_py`
+- `execution_engine_rs` (Phase 2+)
 
 ### Shared Infrastructure
 
-* Object storage (Parquet)
-* Postgres (registry, metrics, audit)
-* Alpaca REST + WebSockets
+- Object storage (Parquet)
+- Postgres (registry, metrics, audit)
+- Alpaca REST + WebSockets
 
 ---
 
@@ -97,14 +114,41 @@ This PRD covers **all three phases**, with **quotes + trades ingestion from Day 
 
 **Raw, immutable ingestion of:**
 
-* Trades (ticks)
-* Quotes (NBBO)
-* Provider bars (validation only)
+- Trades (ticks)
+- Quotes (NBBO)
+- Provider bars (validation only)
 
 Both timestamps required:
 
-* `ts_event` (exchange)
-* `ts_recv` (local receipt)
+- `ts_event` (exchange)
+- `ts_recv` (local receipt)
+
+---
+
+## 5.2 GPU Acceleration Requirements (Phase 1+)
+
+### GPU applicability (where it is used)
+
+- Candidate **ML training** inside `optimizer`:
+  - Prefer XGBoost GPU (`gpu_hist`) when enabled and available.
+  - Future: PyTorch CUDA for neural models.
+- Optional ONNX inference on GPU (rarely required for initial tree/linear models).
+
+### GPU policy controls (must exist)
+
+- `GPU_ENABLED` (true/false)
+- `GPU_DEVICE` (e.g., `cuda:0`)
+- `GPU_BACKEND` (`xgboost_gpu`, `pytorch_cuda`, `cpu`)
+- `GPU_DETERMINISTIC` (true/false)
+- `GPU_FALLBACK_CPU` (true/false, default true)
+
+### Registry/audit logging (must record)
+
+- training_device (`cpu|cuda`)
+- backend used
+- CUDA runtime & driver versions (if cuda)
+- seed and determinism flags
+- per-candidate training time
 
 ---
 
@@ -120,15 +164,13 @@ price: float64
 size: float64
 exchange: string
 conditions: string
-```
+````
 
-Partitioning:
+**Partitioning:**
 
-```
+```ini
 dt=YYYY-MM-DD/symbol=SPY/
 ```
-
----
 
 ### 6.2 Quotes (`lake/raw/quotes/`)
 
@@ -143,11 +185,7 @@ ask_size: float64
 exchange: string
 ```
 
----
-
 ### 6.3 Microstructure Bars (`lake/features/micro_bars/`)
-
-(Generated from trades + quotes)
 
 ```text
 symbol: string
@@ -164,13 +202,7 @@ trade_volume: float64
 realized_vol: float64
 ```
 
-Granularities:
-
-* 5s
-* 15s
-* 30s
-
----
+Granularities: **5s**, **15s**, **30s**
 
 ### 6.4 Timeframe Bars (`lake/features/bars/`)
 
@@ -188,17 +220,9 @@ atr: float64
 realized_vol: float64
 ```
 
-Granularities:
-
-* 1m
-* 5m
-* 15m
-
----
+Granularities: **1m**, **5m**, **15m**
 
 ### 6.5 Decision-Frame Feature Matrix (`lake/features/decision_frame/`)
-
-(As-of joined, final model input)
 
 ```text
 symbol: string
@@ -233,7 +257,7 @@ vol_15m: float64
 ```text
 symbol: string
 decision_ts: timestamp[ns]
-horizon: int32   # seconds
+horizon: int32            # seconds
 fwd_return_mid: float64
 fwd_return_net: float64   # net of half-spread
 direction: int8           # -1, 0, +1
@@ -245,12 +269,12 @@ direction: int8           # -1, 0, +1
 
 ### Fill Price
 
-* Buy: `ask + slippage`
-* Sell: `bid - slippage`
+* **Buy:** ask + slippage
+* **Sell:** bid − slippage
 
 ### Slippage Model
 
-```
+```makefile
 slippage_bps =
   a * spread_bps +
   b * (order_notional / top_of_book_notional) +
@@ -258,6 +282,8 @@ slippage_bps =
 ```
 
 Coefficients `a,b,c` are fixed per cost model version.
+
+> GPU note: backtesting is CPU by default; GPU backtest acceleration is optional later if large-scale vectorization is implemented.
 
 ---
 
@@ -271,6 +297,10 @@ Each strategy is defined by:
 * feature subset
 * model or rule
 * execution policy
+* training configuration:
+
+  * `training_device_preference` (cpu|cuda|auto)
+  * `backend` (xgboost|sklearn|pytorch)
 
 Multiple strategies may be active simultaneously.
 
@@ -280,9 +310,11 @@ Multiple strategies may be active simultaneously.
 
 ### 10.1 JSON Strategy Artifact (Rules / Simple Models)
 
+(unchanged shape; must include training metadata fields)
+
 ```json
 {
-  "artifact_version": "1.0",
+  "artifact_version": "1.1",
   "strategy_id": "trend_5m_v3",
   "strategy_family": "trend",
   "feature_schema_version": "decision_frame_v1",
@@ -291,6 +323,15 @@ Multiple strategies may be active simultaneously.
   "risk_profile_id": "rp_default",
   "symbols": ["SPY", "QQQ"],
   "decision_interval_sec": 60,
+
+  "training_metadata": {
+    "training_device": "cuda",
+    "gpu_backend": "xgboost_gpu",
+    "cuda_version": "12.x",
+    "driver_version": "xxx.xx",
+    "seed": 1337,
+    "deterministic": false
+  },
 
   "signal_logic": {
     "type": "threshold",
@@ -312,13 +353,13 @@ Multiple strategies may be active simultaneously.
 }
 ```
 
----
-
 ### 10.2 ONNX Artifact Contract (ML Models)
+
+Inputs and outputs are unchanged; metadata is expanded to capture GPU training provenance.
 
 **Inputs (exact order):**
 
-```
+```csharp
 [spread_30s,
  microprice_30s,
  quote_imbalance_30s,
@@ -336,7 +377,7 @@ Multiple strategies may be active simultaneously.
 
 **Outputs:**
 
-```
+```nginx
 expected_return
 confidence_score
 ```
@@ -353,6 +394,18 @@ confidence_score
   "calibration": {
     "expected_return_scale": 1.0,
     "confidence_threshold": 0.6
+  },
+  "training_metadata": {
+    "training_device": "cuda",
+    "gpu_backend": "xgboost_gpu",
+    "cuda_version": "12.x",
+    "driver_version": "xxx.xx",
+    "seed": 1337,
+    "deterministic": false
+  },
+  "inference_preferences": {
+    "prefer_gpu": false,
+    "cpu_fallback": true
   }
 }
 ```
@@ -375,135 +428,35 @@ confidence_score
 
   * cancel all orders
   * halt trading
+* Optional: ONNX GPU inference (only if needed), with CPU fallback
 
 ---
 
 ## 12. Phase 3 — Regime Classifier & Allocator (Detailed)
 
-### 12.1 Regime State Vector
-
-At time `t`, compute:
-
-```
-R(t) = [
-  σ_short(t),        # 1m realized vol
-  σ_long(t),         # 15m realized vol
-  trend_strength(t), # |ret_15m| / σ_15m
-  spread_z(t),       # z-score of spread
-  liquidity_z(t)     # z-score of top-of-book depth
-]
-```
-
----
-
-### 12.2 Regime Classification
-
-Discrete regimes via clustering or rules:
-
-| Regime         | Conditions                    |
-| -------------- | ----------------------------- |
-| Trending       | trend_strength > τ₁           |
-| Mean-Reverting | trend_strength < τ₂ & low vol |
-| Volatile       | σ_short / σ_long > τ₃         |
-| Illiquid       | spread_z > τ₄                 |
-
-Regime can be **soft** (probabilities) or **hard** (labels).
-
----
-
-### 12.3 Strategy Expected Utility
-
-For strategy *i* in regime *r*:
-
-```
-U_i(r) = E[PnL_i | r] - λ * Var(PnL_i | r)
-```
-
-Estimated from rolling live + paper performance.
-
----
-
-### 12.4 Capital Allocation (Core Math)
-
-Solve:
-
-```
-maximize_w  Σ w_i * U_i(r)
-subject to:
-  Σ w_i = 1
-  w_i ≥ 0
-  portfolio_drawdown ≤ D_max
-  portfolio_vol ≤ V_max
-```
-
-Practical solution:
-
-* Softmax over utilities with caps
-* Or risk-parity-scaled weights:
-
-```
-w_i ∝ U_i(r) / σ_i
-```
-
----
-
-### 12.5 Live Adaptation
-
-* Recompute allocation daily or on regime change
-* New strategies enter at minimal weight (canary)
-* Poor performers decay automatically
+(unchanged math; GPU primarily impacts training throughput for ML strategies and large sweeps)
 
 ---
 
 ## 13. Monitoring & Rollback
 
-Auto-rollback on:
-
-* drawdown breach
-* slippage spike
-* rejection surge
-* feed instability
-
-Rollback target:
-
-* last known good artifact set + weights
+(unchanged; must also monitor GPU inference latency if enabled)
 
 ---
 
 ## 14. Repo Layout (Final)
 
-```text
-services/
-  ingestor_py/
-  feature_builder_py/
-  labeler_py/
-  backtester_py/
-  optimizer_py/
-  registry_api_py/
-  monitor_py/
-  execution_engine_rs/
-libs/
-  common_types/
-  cost_models/
-  risk_models/
-infra/
-  docker-compose.yml
-  k8s/
-docs/
-  PRD.md
-  EVAL_PROTOCOL.md
-  PROMOTION_GATES.md
-  RUNBOOKS.md
-```
+(unchanged)
 
 ---
 
 ## 15. Final Locked-In Decisions
 
-* **Quotes + trades ingested from Day 1**
-* **Microstructure-aware bars**
-* **1-minute decision clock initially**
-* **Strategy library + regime allocator**
-* **Python research, Rust execution**
+* Quotes + trades ingested from Day 1
+* Microstructure-aware bars
+* 1-minute decision clock initially
+* Strategy library + regime allocator
+* Python research, Rust execution
+* CUDA GPU acceleration used where it provides material benefit (primarily ML training), with CPU fallback
 
 ---

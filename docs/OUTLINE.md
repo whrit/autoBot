@@ -2,11 +2,11 @@
 
 # Autonomous Equities Taker Trading Engine
 
-**Alpaca-powered • Multi-timeframe • Microstructure-aware • Self-iterating**
+**Alpaca-powered • Multi-timeframe • Microstructure-aware • Self-iterating • GPU-accelerated where applicable**
 
 ## Overview
 
-This document defines a **production-shaped, autonomous equities taker engine** that continuously:
+This document defines a **production-shaped, autonomous, equities taker engine** that continuously:
 
 > **ingests → generates strategies → backtests → selects → shadows → paper trades → promotes → trades → monitors → rolls back**
 
@@ -14,8 +14,9 @@ The system is designed to **iterate without manual intervention**, while remaini
 
 Key architectural decisions baked in from the start:
 
-* **Option A**: ingest *raw trades + quotes* and derive **microstructure-aware bars** (instead of naïve bar-only or full tick-by-tick execution).
-* **Approach 2**: run a **strategy library + regime-based allocator**, rather than endlessly mutating a single strategy.
+- **Option A**: ingest *raw trades + quotes* and derive **microstructure-aware bars** (instead of naïve bar-only or full tick-by-tick execution).
+- **Approach 2**: run a **strategy library + regime-based allocator**, rather than endlessly mutating a single strategy.
+- **GPU Acceleration (CUDA where available)**: accelerate **model training and candidate sweeps** (and optionally inference) when running on NVIDIA GPUs; clean CPU fallback is mandatory.
 
 ---
 
@@ -23,18 +24,17 @@ Key architectural decisions baked in from the start:
 
 ### What “Autonomous” Means (Precisely)
 
-* The system **automatically generates strategy candidates**, evaluates them rigorously, and promotes winners.
-* Humans define:
-
-  * allowed strategy families
-  * risk limits
-  * evaluation protocol
-  * promotion gates
-* Humans do **not**:
-
-  * tune parameters manually
-  * decide which model to ship
-  * intervene during normal iteration
+- The system **automatically generates strategy candidates**, evaluates them rigorously, and promotes winners.
+- Humans define:
+  - allowed strategy families
+  - risk limits
+  - evaluation protocol
+  - promotion gates
+  - GPU policy (enabled/disabled, device selection, fallback behavior)
+- Humans do **not**:
+  - tune parameters manually
+  - decide which model to ship
+  - intervene during normal iteration
 
 This is **automation with policy**, not an unconstrained optimizer.
 
@@ -42,27 +42,24 @@ This is **automation with policy**, not an unconstrained optimizer.
 
 ### Non-Negotiables
 
-* **Reproducibility**
-
-  * Same code + same data snapshot → identical backtest results
-* **No Leakage**
-
-  * Strict as-of joins
-  * Feature timestamps ≤ decision timestamps
-  * Corporate actions handled correctly
-* **Realistic Execution Modeling**
-
-  * Quote-based fills (bid/ask)
-  * Spread + liquidity-aware slippage
-* **Promotion Gates**
-
-  * Shadow → Paper → Canary → Full
-  * Automatic rollback
-* **Full Audit Trail**
-
-  * Why a strategy was promoted
-  * What data it used
-  * What trades it generated
+- **Reproducibility**
+  - Same code + same data snapshot → identical results
+  - GPU runs must be reproducible: log seeds, library versions, GPU device, and determinism settings
+- **No Leakage**
+  - Strict as-of joins
+  - Feature timestamps ≤ decision timestamps
+  - Corporate actions handled correctly
+- **Realistic Execution Modeling**
+  - Quote-based fills (bid/ask)
+  - Spread + liquidity-aware slippage
+- **Promotion Gates**
+  - Shadow → Paper → Canary → Full
+  - Automatic rollback
+- **Full Audit Trail**
+  - Why a strategy was promoted
+  - What data it used
+  - What it traded
+  - Whether it was trained with GPU/CPU and with what settings
 
 ---
 
@@ -70,28 +67,26 @@ This is **automation with policy**, not an unconstrained optimizer.
 
 ### Trading & Account
 
-* Paper trading uses the same API schema as live, with different credentials/endpoints.
-* Orders use Alpaca’s standard `/orders` lifecycle.
+- Paper trading uses the same API schema as live, with different credentials/endpoints.
+- Orders use Alpaca’s standard `/orders` lifecycle.
 
 ### Streaming (Two WebSocket Classes)
 
 1. **Trading Updates Stream**
-
-   * Orders, fills, position updates, account state
-   * Used by runner + monitor
+   - Orders, fills, position updates, account state
+   - Used by runner + monitor
 
 2. **Market Data Streams**
-
-   * Trades
-   * Quotes (NBBO)
-   * Bars
-   * (Optional later: news)
+   - Trades
+   - Quotes (NBBO)
+   - Bars
+   - (Optional later: news)
 
 > **Important**:
 >
-> * Free plan → IEX feed
-> * Paid plan → SIP consolidated tape
->   Architecture supports either without changes.
+> - Free plan → IEX feed  
+> - Paid plan → SIP consolidated tape  
+> - Architecture supports either without changes.
 
 ---
 
@@ -101,11 +96,12 @@ This is **automation with policy**, not an unconstrained optimizer.
 
 Deliver a **fully autonomous loop** with:
 
-* quotes + trades ingestion
-* multi-timeframe feature construction
-* strategy library evaluation
-* shadow + paper execution
-* realistic taker fills
+- quotes + trades ingestion
+- multi-timeframe feature construction
+- strategy library evaluation
+- shadow + paper execution
+- realistic taker fills
+- **CUDA GPU acceleration for model training** where applicable (primarily ML strategies)
 
 No live capital yet.
 
@@ -115,17 +111,43 @@ No live capital yet.
 
 ### Option A: Tick/Quote Ingestion → Microstructure-Aware Bars
 
-* **Raw trades + quotes are ingested and stored**
-* Strategies **do NOT operate on every tick**
-* Decisions occur on **fixed decision clocks** (initially 1-minute)
-* Microstructure signals are derived from short windows (5s–60s)
+- **Raw trades + quotes are ingested and stored**
+- Strategies **do NOT operate on every tick**
+- Decisions occur on **fixed decision clocks** (initially 1-minute)
+- Microstructure signals are derived from short windows (5s–60s)
 
 This yields:
 
-* realistic slippage modeling
-* liquidity-aware signals
-* fast iteration
-* low risk of execution optimism
+- realistic slippage modeling
+- liquidity-aware signals
+- fast iteration
+- low risk of execution optimism
+
+---
+
+## GPU Acceleration Policy (Phase 1)
+
+### Where GPU is used
+
+- **ML model training** in `optimizer` (e.g., XGBoost GPU for tree models)
+- Optional: GPU-accelerated inference for large models (usually not required in Phase 1)
+
+### Where GPU is NOT required (default CPU)
+
+- ingestion
+- feature building (unless adopting RAPIDS/cuDF later)
+- backtesting (CPU by default; GPU is optional only if large-scale vectorized backtests are implemented)
+
+### Requirements
+
+- GPU usage is **config-driven** (`GPU_ENABLED`, `GPU_DEVICE`, `GPU_BACKEND`)
+- Must support **CPU fallback** transparently if no CUDA device is available
+- Registry must record:
+  - `training_device`
+  - `gpu_backend`
+  - `cuda_version`
+  - `driver_version`
+  - `determinism_flags`
 
 ---
 
@@ -135,26 +157,25 @@ This yields:
 
 **Purpose:** Capture raw market truth.
 
-* Pull historical:
-
-  * trades
-  * quotes
-  * bars (for validation only)
-* Subscribe to real-time WebSocket streams
-* Write **immutable Parquet** data
+- Pull historical:
+  - trades
+  - quotes
+  - bars (for validation only)
+- Subscribe to real-time WebSocket streams
+- Write **immutable Parquet** data
 
 **Outputs**
 
-* `lake/raw/trades/`
-* `lake/raw/quotes/`
-* `lake/raw/bars_provider/`
-* `universe/` table (symbols, exchange, tradability)
+- `lake/raw/trades/`
+- `lake/raw/quotes/`
+- `lake/raw/bars_provider/`
+- `universe/` table (symbols, exchange, tradability)
 
 **Key Fields**
 
-* `ts_event` (exchange timestamp)
-* `ts_recv` (receipt timestamp)
-* prices, sizes, symbol
+- `ts_event` (exchange timestamp)
+- `ts_recv` (receipt timestamp)
+- prices, sizes, symbol
 
 > Both timestamps are mandatory to support latency modeling and leakage detection.
 
@@ -167,38 +188,36 @@ This yields:
 #### Feature Classes
 
 1. **Microstructure (from quotes + trades)**
-
-   * spread
-   * midprice / microprice
-   * quote imbalance
-   * top-of-book depth
-   * trade imbalance (tick rule proxy)
-   * short-horizon realized volatility
+   - spread
+   - midprice / microprice
+   - quote imbalance
+   - top-of-book depth
+   - trade imbalance (tick rule proxy)
+   - short-horizon realized volatility
 
 2. **Derived Micro-Bars**
-
-   * 5s / 15s / 30s bars built from ticks
-   * VWAP, range, volume
+   - 5s / 15s / 30s bars built from ticks
+   - VWAP, range, volume
 
 3. **Traditional Bars**
-
-   * 1m / 5m / 15m OHLCV
-   * momentum, mean reversion, volatility
+   - 1m / 5m / 15m OHLCV
+   - momentum, mean reversion, volatility
 
 #### Multi-Timeframe Join (As-Of)
 
 At each decision timestamp `t`:
 
-```
-X(t) = [
-  micro_30s_features ending ≤ t,
-  bar_1m_features ending ≤ t,
-  bar_5m_features ending ≤ t,
-  bar_15m_features ending ≤ t
-]
-```
+```yaml
+X(t):
+  - micro_30s_features ending ≤ t
+  - bar_1m_features ending ≤ t
+  - bar_5m_features ending ≤ t
+  - bar_15m_features ending ≤ t
+````
 
 No future data is ever visible.
+
+> GPU note: feature building remains CPU-first in Phase 1. GPU feature acceleration is a later-phase optional enhancement if RAPIDS/cuDF is adopted.
 
 ---
 
@@ -238,6 +257,8 @@ No future data is ever visible.
 
 This is **not** a tick-by-tick simulator, but is **vastly more realistic than mid-price fills**.
 
+> GPU note: backtesting is CPU by default. GPU acceleration may be introduced later for high-volume vectorized backtests, but is not a Phase 1 requirement.
+
 ---
 
 ### E. `optimizer` (Python)
@@ -257,6 +278,22 @@ This is **not** a tick-by-tick simulator, but is **vastly more realistic than mi
   * parameter sweeps
   * model variants
   * execution policies
+
+#### GPU-Accelerated Training (where applicable)
+
+* If candidate is ML-based and GPU is enabled:
+
+  * Prefer CUDA acceleration for training:
+
+    * XGBoost: `tree_method=gpu_hist`
+    * (Future) PyTorch-based models on CUDA
+* CPU fallback must exist for all models.
+
+Registry must record:
+
+* `training_device`: `cpu|cuda`
+* `backend`: `xgboost_gpu|pytorch_cuda|cpu`
+* reproducibility settings (seeds, determinism toggles)
 
 #### Evaluation
 
@@ -288,6 +325,12 @@ Stores:
 * lifecycle state:
 
   * candidate → shadow → paper → promoted → retired
+* GPU metadata:
+
+  * training device/backend
+  * CUDA/driver versions (if applicable)
+  * determinism flags
+  * elapsed training time (per candidate)
 
 ---
 
@@ -304,6 +347,8 @@ Stores:
 
   * submits to Alpaca paper account
 * Confirms fills via trading websocket
+
+> GPU note: inference is CPU by default in Phase 1; GPU inference is optional and only needed for heavy neural models.
 
 ---
 
@@ -340,7 +385,7 @@ Triggers:
 * strategy registry
 * metrics
 * promotion decisions
-* full audit trail
+* full audit trail (including GPU metadata)
 
 ---
 
@@ -369,6 +414,8 @@ Runs daily or weekly:
 
 Move the always-on trading runtime to **Rust**, while keeping research in Python.
 
+> GPU note: Phase 2 may optionally add **GPU inference** (onnxruntime-gpu) if model complexity warrants it, but CPU inference remains default.
+
 ---
 
 ## Phase 2 Services
@@ -387,6 +434,11 @@ Responsibilities:
 * submit orders
 * process fills via trading websocket
 
+Optional GPU inference (if enabled):
+
+* ONNX inference using GPU runtime when supported
+* CPU fallback required
+
 ---
 
 ### B. `control_plane` (Python API)
@@ -395,6 +447,7 @@ Responsibilities:
 * Capital allocation
 * Kill switch
 * Configuration updates
+* GPU policy configuration (enable/disable inference GPU)
 
 ---
 
@@ -414,6 +467,7 @@ Responsibilities:
 * order latency
 * slippage distributions
 * alerts on anomalies
+* (If GPU used) GPU utilization, inference latency, and fallback events
 
 ---
 
@@ -430,6 +484,8 @@ Each artifact includes:
 * label horizon
 * cost model version
 * risk profile ID
+* (If ML) model input order and output semantics
+* (If trained on GPU) training metadata (device/backend/version)
 
 ---
 
@@ -460,7 +516,7 @@ Run concurrently:
 * trend strategies
 * mean reversion strategies
 * microstructure confirmation strategies
-* ML-based predictors
+* ML-based predictors (GPU-accelerated training for large sweeps)
 
 ---
 
@@ -484,6 +540,10 @@ This replaces brittle “best single model” logic.
 * Incremental computation
 * Rust ingestion for heavy tick loads
 * Async feature consumers
+
+Optional GPU data acceleration (advanced):
+
+* RAPIDS/cuDF-based feature pipelines (only if it materially improves throughput; requires careful integration)
 
 ---
 
@@ -525,7 +585,7 @@ This replaces brittle “best single model” logic.
 
 ## Suggested Repo Layout
 
-```
+```text
 services/
   ingestor_py/
   feature_builder_py/
