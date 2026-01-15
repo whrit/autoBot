@@ -1,0 +1,30 @@
+{
+  "onnx_version": "1.15",
+  "feature_schema_version": "decision_frame_v1",
+  "label_horizon_sec": 60,
+  "cost_model_version": "cm_v1",
+  "risk_profile_id": "rp_default",
+  "inputs_order": [
+    "spread_30s",
+    "microprice_30s",
+    "quote_imbalance_30s",
+    "vol_30s",
+    "ret_1m",
+    "vol_1m",
+    "atr_1m",
+    "ret_5m",
+    "trend_5m",
+    "vol_5m",
+    "ret_15m",
+    "trend_15m",
+    "vol_15m"
+  ],
+  "outputs": [
+    "expected_return",
+    "confidence_score"
+  ],
+  "calibration": {
+    "expected_return_scale": 1.0,
+    "confidence_threshold": 0.6
+  }
+}

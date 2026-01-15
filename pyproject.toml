@@ -1,0 +1,49 @@
+[project]
+name = "autoBot"
+version = "0.1.0"
+description = "Autonomous equities taker engine (Alpaca) — microstructure-aware multi-timeframe strategy library with regime allocation."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [{ name = "Whrit" }]
+dependencies = []
+
+[tool.uv]
+# Keep the root as a non-package "workspace controller"
+package = false
+
+[tool.uv.workspace]
+members = [
+  "services/ingestor_py",
+  "services/feature_builder_py",
+  "services/labeler_py",
+  "services/backtester_py",
+  "services/optimizer_py",
+  "services/registry_api_py",
+  "services/monitor_py",
+  "libs/common_types",
+  "libs/cost_models",
+  "libs/risk_models",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-select = ["I", "UP", "B", "SIM", "RUF"]
+ignore = ["RUF002", "RUF003"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["common_types", "cost_models", "risk_models"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+no_implicit_optional = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

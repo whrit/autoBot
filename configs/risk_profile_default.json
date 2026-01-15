@@ -1,0 +1,7 @@
+{
+  "max_gross_notional": 100000,
+  "max_net_notional": 50000,
+  "max_position_per_symbol": 25000,
+  "max_daily_loss": 2000,
+  "max_orders_per_minute": 60
+}
