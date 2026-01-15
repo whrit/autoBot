@@ -1,51 +1,51 @@
 {
   "running": true,
-  "startedAt": "2026-01-15T17:53:38.044Z",
+  "startedAt": "2026-01-15T20:46:59.004Z",
   "workers": {
     "map": {
-      "runCount": 11,
-      "successCount": 11,
+      "runCount": 12,
+      "successCount": 12,
       "failureCount": 0,
-      "averageDurationMs": 0.6363636363636364,
-      "isRunning": false,
-      "nextRun": "2026-01-15T20:38:38.592Z",
-      "lastRun": "2026-01-15T20:23:38.591Z"
+      "averageDurationMs": 0.5833333333333334,
+      "lastRun": "2026-01-15T20:46:59.006Z",
+      "nextRun": "2026-01-15T20:46:59.004Z",
+      "isRunning": false
     },
     "audit": {
       "runCount": 11,
       "successCount": 0,
       "failureCount": 11,
       "averageDurationMs": 0,
-      "isRunning": false,
-      "nextRun": "2026-01-15T20:40:39.624Z",
-      "lastRun": "2026-01-15T20:30:39.623Z"
+      "lastRun": "2026-01-15T20:30:39.623Z",
+      "nextRun": "2026-01-15T20:48:59.004Z",
+      "isRunning": false
     },
     "optimize": {
       "runCount": 8,
       "successCount": 0,
       "failureCount": 8,
       "averageDurationMs": 0,
-      "isRunning": false,
-      "nextRun": "2026-01-15T20:37:39.267Z",
-      "lastRun": "2026-01-15T20:22:39.267Z"
+      "lastRun": "2026-01-15T20:22:39.267Z",
+      "nextRun": "2026-01-15T20:50:59.005Z",
+      "isRunning": false
     },
     "consolidate": {
       "runCount": 6,
       "successCount": 6,
       "failureCount": 0,
       "averageDurationMs": 0.6666666666666666,
-      "isRunning": false,
-      "nextRun": "2026-01-15T20:59:38.580Z",
-      "lastRun": "2026-01-15T20:30:39.625Z"
+      "lastRun": "2026-01-15T20:30:39.625Z",
+      "nextRun": "2026-01-15T21:00:39.625Z",
+      "isRunning": false
     },
     "testgaps": {
       "runCount": 7,
       "successCount": 0,
       "failureCount": 7,
       "averageDurationMs": 0,
-      "isRunning": false,
-      "nextRun": "2026-01-15T20:26:38.749Z",
-      "lastRun": "2026-01-15T20:31:38.862Z"
+      "lastRun": "2026-01-15T20:31:38.862Z",
+      "nextRun": "2026-01-15T20:54:59.005Z",
+      "isRunning": false
     },
     "predict": {
       "runCount": 0,
@@ -131,5 +131,5 @@
       }
     ]
   },
-  "savedAt": "2026-01-15T20:31:38.862Z"
+  "savedAt": "2026-01-15T20:46:59.007Z"
 }
