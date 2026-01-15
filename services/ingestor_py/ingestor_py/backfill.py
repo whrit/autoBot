@@ -5,7 +5,7 @@ Handles downloading historical trades, quotes, and bars from Alpaca
 and writing them to partitioned Parquet files.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TypedDict
 
@@ -193,6 +193,6 @@ class BackfillOrchestrator:
         Returns:
             Summary of ingested data.
         """
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
         start = end - timedelta(days=days)
         return self.backfill(symbols, start, end, data_types)

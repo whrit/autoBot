@@ -4,13 +4,12 @@ Parquet Writer - Write market data to partitioned Parquet files.
 Partitioning scheme: lake/raw/{data_type}/dt=YYYY-MM-DD/symbol=XXX/
 """
 
-from datetime import datetime, timezone
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Sequence
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-
 
 # Schema definitions for each data type
 TRADE_SCHEMA = pa.schema(
@@ -56,7 +55,7 @@ BAR_SCHEMA = pa.schema(
 def _extract_date(ts: datetime) -> str:
     """Extract date string from timestamp."""
     if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=timezone.utc)
+        ts = ts.replace(tzinfo=UTC)
     return ts.strftime("%Y-%m-%d")
 
 
@@ -130,11 +129,13 @@ class ParquetWriter:
                 col_name = col.name
                 value = record.get(col_name)
 
-                # Handle datetime conversion
-                if pa.types.is_timestamp(col.type) and isinstance(value, datetime):
-                    # Ensure timezone-aware
-                    if value.tzinfo is None:
-                        value = value.replace(tzinfo=timezone.utc)
+                # Handle datetime conversion - ensure timezone-aware
+                if (
+                    pa.types.is_timestamp(col.type)
+                    and isinstance(value, datetime)
+                    and value.tzinfo is None
+                ):
+                    value = value.replace(tzinfo=UTC)
                 columns[col_name].append(value)
 
         # Create table and write

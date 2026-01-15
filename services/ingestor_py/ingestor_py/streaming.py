@@ -7,14 +7,13 @@ Includes reconnection logic with exponential backoff.
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from alpaca.data.live import StockDataStream
 
 from ingestor_py.writer import ParquetWriter
-
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +93,7 @@ class RealtimeStreamer:
         self._stream.subscribe_trades(self._on_trade, *self.symbols)
         self._stream.subscribe_quotes(self._on_quote, *self.symbols)
 
-    def _on_trade(self, trade: Any) -> None:
+    async def _on_trade(self, trade: Any) -> None:
         """Handle incoming trade message.
 
         Captures ts_recv immediately upon receipt for latency measurement.
@@ -102,7 +101,7 @@ class RealtimeStreamer:
         Args:
             trade: Trade object from Alpaca stream.
         """
-        ts_recv = datetime.now(timezone.utc)
+        ts_recv = datetime.now(UTC)
 
         trade_record: dict[str, object] = {
             "symbol": trade.symbol,
@@ -123,7 +122,7 @@ class RealtimeStreamer:
         if len(self._trade_buffer) >= self.BATCH_SIZE:
             self._flush_trades()
 
-    def _on_quote(self, quote: Any) -> None:
+    async def _on_quote(self, quote: Any) -> None:
         """Handle incoming quote message.
 
         Captures ts_recv immediately upon receipt for latency measurement.
@@ -131,7 +130,7 @@ class RealtimeStreamer:
         Args:
             quote: Quote object from Alpaca stream.
         """
-        ts_recv = datetime.now(timezone.utc)
+        ts_recv = datetime.now(UTC)
 
         quote_record: dict[str, object] = {
             "symbol": quote.symbol,
@@ -183,11 +182,18 @@ class RealtimeStreamer:
         self._flush_quotes()
 
     async def _run_with_reconnect(self) -> None:
-        """Run the stream with reconnection logic."""
+        """Run the stream with reconnection logic.
+
+        The Alpaca StockDataStream.run() is blocking, so we run it in
+        a thread executor to avoid blocking the async event loop.
+        """
+        loop = asyncio.get_event_loop()
+
         while self._running and self.reconnect_attempts < self.MAX_RECONNECT_ATTEMPTS:
             try:
                 logger.info("Starting Alpaca WebSocket stream...")
-                self._stream.run()
+                # Run blocking stream in thread executor
+                await loop.run_in_executor(None, self._stream.run)
             except Exception as e:
                 if not self._running:
                     break

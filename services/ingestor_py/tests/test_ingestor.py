@@ -5,12 +5,11 @@ London School (Mockist) approach - testing object interactions and collaboration
 Covers T1.06-T1.10: Alpaca REST client, Parquet writer, backfill, WebSocket streaming.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
@@ -62,7 +61,7 @@ class TestAlpacaDataClient:
         """Test fetching historical trades returns iterator of dicts."""
         # Mock the response from Alpaca
         mock_trade = MagicMock()
-        mock_trade.timestamp = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+        mock_trade.timestamp = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
         mock_trade.price = 450.50
         mock_trade.size = 100.0
         mock_trade.exchange = "V"
@@ -71,8 +70,8 @@ class TestAlpacaDataClient:
         mock_response = {"SPY": [mock_trade]}
         mock_historical_client.get_stock_trades.return_value = mock_response
 
-        start = datetime(2024, 1, 15, 9, 30, 0, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 15, 16, 0, 0, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 16, 0, 0, tzinfo=UTC)
 
         trades = list(client.get_trades("SPY", start, end))
 
@@ -88,7 +87,7 @@ class TestAlpacaDataClient:
     ) -> None:
         """Test fetching historical quotes returns iterator of dicts."""
         mock_quote = MagicMock()
-        mock_quote.timestamp = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+        mock_quote.timestamp = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
         mock_quote.bid_price = 450.45
         mock_quote.bid_size = 500.0
         mock_quote.ask_price = 450.55
@@ -100,8 +99,8 @@ class TestAlpacaDataClient:
         mock_response = {"SPY": [mock_quote]}
         mock_historical_client.get_stock_quotes.return_value = mock_response
 
-        start = datetime(2024, 1, 15, 9, 30, 0, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 15, 16, 0, 0, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 16, 0, 0, tzinfo=UTC)
 
         quotes = list(client.get_quotes("SPY", start, end))
 
@@ -117,7 +116,7 @@ class TestAlpacaDataClient:
     ) -> None:
         """Test fetching historical bars returns iterator of dicts."""
         mock_bar = MagicMock()
-        mock_bar.timestamp = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+        mock_bar.timestamp = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
         mock_bar.open = 450.00
         mock_bar.high = 451.00
         mock_bar.low = 449.50
@@ -129,8 +128,8 @@ class TestAlpacaDataClient:
         mock_response = {"SPY": [mock_bar]}
         mock_historical_client.get_stock_bars.return_value = mock_response
 
-        start = datetime(2024, 1, 15, 9, 30, 0, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 15, 16, 0, 0, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 16, 0, 0, tzinfo=UTC)
 
         bars = list(client.get_bars("SPY", start, end))
 
@@ -146,7 +145,7 @@ class TestAlpacaDataClient:
     ) -> None:
         """Verify both ts_event and ts_recv are captured for trades."""
         mock_trade = MagicMock()
-        mock_trade.timestamp = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+        mock_trade.timestamp = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
         mock_trade.price = 450.50
         mock_trade.size = 100.0
         mock_trade.exchange = "V"
@@ -154,8 +153,8 @@ class TestAlpacaDataClient:
 
         mock_historical_client.get_stock_trades.return_value = {"SPY": [mock_trade]}
 
-        start = datetime(2024, 1, 15, 9, 30, 0, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 15, 16, 0, 0, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 16, 0, 0, tzinfo=UTC)
 
         trades = list(client.get_trades("SPY", start, end))
 
@@ -171,8 +170,8 @@ class TestAlpacaDataClient:
         """Test handling of empty response from Alpaca."""
         mock_historical_client.get_stock_trades.return_value = {}
 
-        start = datetime(2024, 1, 15, 9, 30, 0, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 15, 16, 0, 0, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 16, 0, 0, tzinfo=UTC)
 
         trades = list(client.get_trades("SPY", start, end))
 
@@ -203,8 +202,8 @@ class TestParquetWriter:
         trades = [
             {
                 "symbol": "SPY",
-                "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-                "ts_recv": datetime(2024, 1, 15, 10, 0, 0, 100, tzinfo=timezone.utc),
+                "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                "ts_recv": datetime(2024, 1, 15, 10, 0, 0, 100, tzinfo=UTC),
                 "price": 450.50,
                 "size": 100.0,
                 "exchange": "V",
@@ -233,8 +232,8 @@ class TestParquetWriter:
         quotes = [
             {
                 "symbol": "SPY",
-                "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-                "ts_recv": datetime(2024, 1, 15, 10, 0, 0, 50, tzinfo=timezone.utc),
+                "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                "ts_recv": datetime(2024, 1, 15, 10, 0, 0, 50, tzinfo=UTC),
                 "bid_price": 450.45,
                 "bid_size": 500.0,
                 "ask_price": 450.55,
@@ -261,8 +260,8 @@ class TestParquetWriter:
         bars = [
             {
                 "symbol": "SPY",
-                "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-                "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+                "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
                 "open": 450.00,
                 "high": 451.00,
                 "low": 449.50,
@@ -290,8 +289,8 @@ class TestParquetWriter:
         trades = [
             {
                 "symbol": "SPY",
-                "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-                "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+                "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
                 "price": 450.50,
                 "size": 100.0,
                 "exchange": "V",
@@ -299,8 +298,8 @@ class TestParquetWriter:
             },
             {
                 "symbol": "SPY",
-                "ts_event": datetime(2024, 1, 16, 10, 0, 0, tzinfo=timezone.utc),
-                "ts_recv": datetime(2024, 1, 16, 10, 0, 0, tzinfo=timezone.utc),
+                "ts_event": datetime(2024, 1, 16, 10, 0, 0, tzinfo=UTC),
+                "ts_recv": datetime(2024, 1, 16, 10, 0, 0, tzinfo=UTC),
                 "price": 451.50,
                 "size": 200.0,
                 "exchange": "V",
@@ -323,8 +322,8 @@ class TestParquetWriter:
         trades = [
             {
                 "symbol": "SPY",
-                "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-                "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+                "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
                 "price": 450.50,
                 "size": 100.0,
                 "exchange": "V",
@@ -332,8 +331,8 @@ class TestParquetWriter:
             },
             {
                 "symbol": "QQQ",
-                "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-                "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+                "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
                 "price": 380.25,
                 "size": 150.0,
                 "exchange": "V",
@@ -366,8 +365,8 @@ class TestBackfillOrchestrator:
             [
                 {
                     "symbol": "SPY",
-                    "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-                    "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+                    "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                    "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
                     "price": 450.50,
                     "size": 100.0,
                     "exchange": "V",
@@ -379,8 +378,8 @@ class TestBackfillOrchestrator:
             [
                 {
                     "symbol": "SPY",
-                    "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-                    "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+                    "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                    "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
                     "bid_price": 450.45,
                     "bid_size": 500.0,
                     "ask_price": 450.55,
@@ -394,8 +393,8 @@ class TestBackfillOrchestrator:
             [
                 {
                     "symbol": "SPY",
-                    "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-                    "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+                    "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                    "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
                     "open": 450.0,
                     "high": 451.0,
                     "low": 449.5,
@@ -425,8 +424,8 @@ class TestBackfillOrchestrator:
         self, orchestrator: Any, mock_client: MagicMock, tmp_path: Path
     ) -> None:
         """Test backfilling a date range."""
-        start = datetime(2024, 1, 15, 0, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 15, 23, 59, 59, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 15, 0, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 23, 59, 59, tzinfo=UTC)
 
         result = orchestrator.backfill(
             symbols=["SPY"],
@@ -444,16 +443,16 @@ class TestBackfillOrchestrator:
         self, orchestrator: Any, mock_client: MagicMock
     ) -> None:
         """Test backfilling multiple symbols."""
-        start = datetime(2024, 1, 15, 0, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 15, 23, 59, 59, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 15, 0, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 23, 59, 59, tzinfo=UTC)
 
         # Update mock to return data for QQQ as well
         mock_client.get_trades.return_value = iter(
             [
                 {
                     "symbol": "SPY",
-                    "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-                    "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+                    "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                    "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
                     "price": 450.50,
                     "size": 100.0,
                     "exchange": "V",
@@ -461,8 +460,8 @@ class TestBackfillOrchestrator:
                 },
                 {
                     "symbol": "QQQ",
-                    "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-                    "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+                    "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                    "ts_recv": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
                     "price": 380.25,
                     "size": 150.0,
                     "exchange": "V",
@@ -482,8 +481,8 @@ class TestBackfillOrchestrator:
 
     def test_backfill_returns_summary(self, orchestrator: Any) -> None:
         """Test backfill returns summary dict."""
-        start = datetime(2024, 1, 15, 0, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2024, 1, 15, 23, 59, 59, tzinfo=timezone.utc)
+        start = datetime(2024, 1, 15, 0, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 15, 23, 59, 59, tzinfo=UTC)
 
         result = orchestrator.backfill(
             symbols=["SPY"],
@@ -506,7 +505,9 @@ class TestRealtimeStreamer:
     def mock_stream(self) -> MagicMock:
         """Create a mock StockDataStream."""
         mock = MagicMock()
-        mock.run = AsyncMock()
+        # run() is blocking, called via run_in_executor
+        mock.run = MagicMock()
+        # close() is async
         mock.close = AsyncMock()
         return mock
 
@@ -543,19 +544,21 @@ class TestRealtimeStreamer:
         self, streamer: Any, mock_stream: MagicMock
     ) -> None:
         """Test start method begins streaming."""
-        # Start in background and stop immediately
         import asyncio
 
-        async def stop_after_delay() -> None:
-            await asyncio.sleep(0.1)
-            await streamer.stop()
+        # Make mock run() raise StopIteration to break out of the loop cleanly
+        # This simulates the stream being stopped
+        def mock_run_side_effect() -> None:
+            # Set running to False to exit the reconnect loop
+            streamer._running = False
 
-        task = asyncio.create_task(stop_after_delay())
-        try:
-            await asyncio.wait_for(streamer.start(), timeout=1.0)
-        except asyncio.TimeoutError:
-            pass
-        await task
+        mock_stream.run.side_effect = mock_run_side_effect
+
+        # Start should complete without hanging
+        await asyncio.wait_for(streamer.start(), timeout=2.0)
+
+        # Verify run was called
+        mock_stream.run.assert_called()
 
     @pytest.mark.asyncio
     async def test_stop_graceful_shutdown(
@@ -565,10 +568,11 @@ class TestRealtimeStreamer:
         await streamer.stop()
         mock_stream.close.assert_called()
 
-    def test_ts_recv_captured_on_trade(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_ts_recv_captured_on_trade(self, tmp_path: Path) -> None:
         """Verify ts_recv is captured on message receipt for trades."""
         mock_stream = MagicMock()
-        mock_stream.run = AsyncMock()
+        mock_stream.run = MagicMock()
         mock_stream.close = AsyncMock()
 
         with patch(
@@ -587,16 +591,16 @@ class TestRealtimeStreamer:
             # Create a mock trade
             mock_trade = MagicMock()
             mock_trade.symbol = "SPY"
-            mock_trade.timestamp = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+            mock_trade.timestamp = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
             mock_trade.price = 450.50
             mock_trade.size = 100.0
             mock_trade.exchange = "V"
             mock_trade.conditions = ["@"]
 
-            # Process the trade
-            before_process = datetime.now(timezone.utc)
-            streamer._on_trade(mock_trade)
-            after_process = datetime.now(timezone.utc)
+            # Process the trade (async handler)
+            before_process = datetime.now(UTC)
+            await streamer._on_trade(mock_trade)
+            after_process = datetime.now(UTC)
 
             # Check that ts_recv was captured
             assert streamer.last_trade is not None
@@ -604,10 +608,11 @@ class TestRealtimeStreamer:
             assert streamer.last_trade["ts_recv"] >= before_process
             assert streamer.last_trade["ts_recv"] <= after_process
 
-    def test_ts_recv_captured_on_quote(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_ts_recv_captured_on_quote(self, tmp_path: Path) -> None:
         """Verify ts_recv is captured on message receipt for quotes."""
         mock_stream = MagicMock()
-        mock_stream.run = AsyncMock()
+        mock_stream.run = MagicMock()
         mock_stream.close = AsyncMock()
 
         with patch(
@@ -626,7 +631,7 @@ class TestRealtimeStreamer:
             # Create a mock quote
             mock_quote = MagicMock()
             mock_quote.symbol = "SPY"
-            mock_quote.timestamp = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+            mock_quote.timestamp = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
             mock_quote.bid_price = 450.45
             mock_quote.bid_size = 500.0
             mock_quote.ask_price = 450.55
@@ -635,10 +640,10 @@ class TestRealtimeStreamer:
             mock_quote.ask_exchange = "V"
             mock_quote.conditions = ["R"]
 
-            # Process the quote
-            before_process = datetime.now(timezone.utc)
-            streamer._on_quote(mock_quote)
-            after_process = datetime.now(timezone.utc)
+            # Process the quote (async handler)
+            before_process = datetime.now(UTC)
+            await streamer._on_quote(mock_quote)
+            after_process = datetime.now(UTC)
 
             # Check that ts_recv was captured
             assert streamer.last_quote is not None
@@ -664,8 +669,8 @@ class TestIntegration:
             [
                 {
                     "symbol": "SPY",
-                    "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
-                    "ts_recv": datetime(2024, 1, 15, 10, 0, 0, 100, tzinfo=timezone.utc),
+                    "ts_event": datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC),
+                    "ts_recv": datetime(2024, 1, 15, 10, 0, 0, 100, tzinfo=UTC),
                     "price": 450.50,
                     "size": 100.0,
                     "exchange": "V",
@@ -725,5 +730,5 @@ class TestIntegration:
         read_ts_recv = table.column("ts_recv")[0].as_py()
 
         # Timestamps should be preserved (may need timezone handling)
-        assert read_ts_event.replace(tzinfo=timezone.utc) == original_ts_event
-        assert read_ts_recv.replace(tzinfo=timezone.utc) == original_ts_recv
+        assert read_ts_event.replace(tzinfo=UTC) == original_ts_event
+        assert read_ts_recv.replace(tzinfo=UTC) == original_ts_recv

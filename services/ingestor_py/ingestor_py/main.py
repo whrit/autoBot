@@ -10,12 +10,10 @@ import asyncio
 import logging
 import os
 import sys
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from ingestor_py.backfill import BackfillOrchestrator
 from ingestor_py.streaming import RealtimeStreamer
-
 
 # Configure logging
 logging.basicConfig(

@@ -5,8 +5,8 @@ Uses alpaca-py SDK for market data access.
 Supports trades, quotes, and bars with configurable feeds (IEX or SIP).
 """
 
-from datetime import datetime, timezone
-from typing import Iterator
+from collections.abc import Iterator
+from datetime import UTC, datetime
 
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import (
@@ -76,7 +76,7 @@ class AlpacaDataClient:
         if not response or symbol not in response:
             return
 
-        ts_recv = datetime.now(timezone.utc)
+        ts_recv = datetime.now(UTC)
 
         for trade in response[symbol]:
             yield {
@@ -119,7 +119,7 @@ class AlpacaDataClient:
         if not response or symbol not in response:
             return
 
-        ts_recv = datetime.now(timezone.utc)
+        ts_recv = datetime.now(UTC)
 
         for quote in response[symbol]:
             yield {
@@ -168,7 +168,7 @@ class AlpacaDataClient:
         if not response or symbol not in response:
             return
 
-        ts_recv = datetime.now(timezone.utc)
+        ts_recv = datetime.now(UTC)
 
         for bar in response[symbol]:
             yield {
