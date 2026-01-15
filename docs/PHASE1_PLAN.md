@@ -49,12 +49,12 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 | **Est. Hours** | 60-80 |
 
 **Key Deliverables:**
-- [ ] Alpaca REST client for historical trades, quotes, bars
-- [ ] WebSocket client for real-time streaming
-- [ ] Parquet writer with partitioning (`dt=YYYY-MM-DD/symbol=XXX/`)
-- [ ] Both timestamps: `ts_event` (exchange) + `ts_recv` (local)
+- [x] Alpaca REST client for historical trades, quotes, bars
+- [x] WebSocket client for real-time streaming
+- [x] Parquet writer with partitioning (`dt=YYYY-MM-DD/symbol=XXX/`)
+- [x] Both timestamps: `ts_event` (exchange) + `ts_recv` (local)
 - [ ] Universe table management
-- [ ] Backfill orchestration
+- [x] Backfill orchestration
 
 **Dependencies:** common_types, alpaca-py, pyarrow
 
@@ -227,16 +227,16 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 
 | Task ID | Task | Est. Hrs | Status |
 |---------|------|----------|--------|
-| T1.01 | Deploy infrastructure (docker-compose up) | 2 | [ ] |
-| T1.02 | Apply database schema (registry_schema.sql) | 2 | [ ] |
-| T1.03 | Implement common_types library (Pydantic models) | 16 | [ ] |
-| T1.04 | Implement cost_models library | 8 | [ ] |
-| T1.05 | Implement risk_models library | 8 | [ ] |
-| T1.06 | ingestor: Alpaca REST client (historical) | 12 | [ ] |
-| T1.07 | ingestor: Parquet writer with partitioning | 8 | [ ] |
-| T1.08 | ingestor: Historical backfill for SPY, QQQ (30 days) | 8 | [ ] |
-| T1.09 | ingestor: WebSocket client (real-time) | 12 | [ ] |
-| T1.10 | Unit tests for ingestor | 4 | [ ] |
+| T1.01 | Deploy infrastructure (docker-compose up) | 2 | [x] |
+| T1.02 | Apply database schema (registry_schema.sql) | 2 | [x] |
+| T1.03 | Implement common_types library (Pydantic models) | 16 | [x] |
+| T1.04 | Implement cost_models library | 8 | [x] |
+| T1.05 | Implement risk_models library | 8 | [x] |
+| T1.06 | ingestor: Alpaca REST client (historical) | 12 | [x] |
+| T1.07 | ingestor: Parquet writer with partitioning | 8 | [x] |
+| T1.08 | ingestor: Historical backfill for SPY, QQQ (30 days) | 8 | [x] |
+| T1.09 | ingestor: WebSocket client (real-time) | 12 | [x] |
+| T1.10 | Unit tests for ingestor | 4 | [x] |
 
 **Milestone M1:** Historical data ingested, real-time streaming operational
 
@@ -357,16 +357,16 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 
 | ID | Task | Service | Sprint | Hours | Deps | Status |
 |----|------|---------|--------|-------|------|--------|
-| T1.01 | Deploy infrastructure | infra | S1 | 2 | - | [ ] |
-| T1.02 | Apply database schema | infra | S1 | 2 | T1.01 | [ ] |
-| T1.03 | common_types library | libs | S1 | 16 | - | [ ] |
-| T1.04 | cost_models library | libs | S1 | 8 | T1.03 | [ ] |
-| T1.05 | risk_models library | libs | S1 | 8 | T1.03 | [ ] |
-| T1.06 | Alpaca REST client | ingestor | S1 | 12 | T1.03 | [ ] |
-| T1.07 | Parquet writer | ingestor | S1 | 8 | T1.06 | [ ] |
-| T1.08 | Historical backfill | ingestor | S1 | 8 | T1.07 | [ ] |
-| T1.09 | WebSocket client | ingestor | S1 | 12 | T1.06 | [ ] |
-| T1.10 | Ingestor tests | ingestor | S1 | 4 | T1.09 | [ ] |
+| T1.01 | Deploy infrastructure | infra | S1 | 2 | - | [x] |
+| T1.02 | Apply database schema | infra | S1 | 2 | T1.01 | [x] |
+| T1.03 | common_types library | libs | S1 | 16 | - | [x] |
+| T1.04 | cost_models library | libs | S1 | 8 | T1.03 | [x] |
+| T1.05 | risk_models library | libs | S1 | 8 | T1.03 | [x] |
+| T1.06 | Alpaca REST client | ingestor | S1 | 12 | T1.03 | [x] |
+| T1.07 | Parquet writer | ingestor | S1 | 8 | T1.06 | [x] |
+| T1.08 | Historical backfill | ingestor | S1 | 8 | T1.07 | [x] |
+| T1.09 | WebSocket client | ingestor | S1 | 12 | T1.06 | [x] |
+| T1.10 | Ingestor tests | ingestor | S1 | 4 | T1.09 | [x] |
 | T2.01 | Standard bars | feature_builder | S2 | 16 | T1.08 | [ ] |
 | T2.02 | Microstructure bars | feature_builder | S2 | 20 | T1.08 | [ ] |
 | T2.03 | As-of join logic | feature_builder | S2 | 12 | T2.01,T2.02 | [ ] |
