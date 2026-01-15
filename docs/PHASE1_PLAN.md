@@ -75,11 +75,11 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 | **Est. Hours** | 80-100 |
 
 **Key Deliverables:**
-- [ ] Microstructure bars (5s, 15s, 30s): spread, midprice, microprice, quote_imbalance, trade_imbalance, realized_vol
-- [ ] Standard bars (1m, 5m, 15m): OHLCV, returns, ATR, volatility
-- [ ] Decision-frame feature matrix with as-of joins
-- [ ] Incremental computation support
-- [ ] Feature schema versioning
+- [x] Microstructure bars (5s, 15s, 30s): spread, midprice, microprice, quote_imbalance, trade_imbalance, realized_vol
+- [x] Standard bars (1m, 5m, 15m): OHLCV, returns, ATR, volatility
+- [x] Decision-frame feature matrix with as-of joins
+- [x] Incremental computation support
+- [x] Feature schema versioning
 
 **Dependencies:** ingestor_py outputs, polars/pandas, common_types
 
@@ -99,10 +99,10 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 | **Est. Hours** | 30-40 |
 
 **Key Deliverables:**
-- [ ] Forward return calculation at configurable horizons (60s, 300s, 900s)
-- [ ] Direction labels (-1, 0, +1) with configurable no-trade band
-- [ ] Net-of-spread return calculation
-- [ ] Midprice/microprice-based returns (not last trade)
+- [x] Forward return calculation at configurable horizons (60s, 300s, 900s)
+- [x] Direction labels (-1, 0, +1) with configurable no-trade band
+- [x] Net-of-spread return calculation
+- [x] Midprice/microprice-based returns (not last trade)
 
 **Dependencies:** feature_builder_py outputs
 
@@ -248,16 +248,16 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 
 | Task ID | Task | Est. Hrs | Deps | Status |
 |---------|------|----------|------|--------|
-| T2.01 | feature_builder: Standard bars (1m, 5m, 15m) | 16 | T1.08 | [ ] |
-| T2.02 | feature_builder: Microstructure bars (5s, 15s, 30s) | 20 | T1.08 | [ ] |
-| T2.03 | feature_builder: As-of join logic | 12 | T2.01, T2.02 | [ ] |
-| T2.04 | feature_builder: Decision-frame matrix | 10 | T2.03 | [ ] |
-| T2.05 | feature_builder: Incremental computation | 8 | T2.04 | [ ] |
-| T2.06 | labeler: Forward returns calculation | 8 | T2.04 | [ ] |
-| T2.07 | labeler: Direction labels with no-trade band | 6 | T2.06 | [ ] |
-| T2.08 | labeler: Net-of-spread returns | 4 | T2.07 | [ ] |
-| T2.09 | Unit tests for feature_builder | 4 | T2.05 | [ ] |
-| T2.10 | Unit tests for labeler | 2 | T2.08 | [ ] |
+| T2.01 | feature_builder: Standard bars (1m, 5m, 15m) | 16 | T1.08 | [x] |
+| T2.02 | feature_builder: Microstructure bars (5s, 15s, 30s) | 20 | T1.08 | [x] |
+| T2.03 | feature_builder: As-of join logic | 12 | T2.01, T2.02 | [x] |
+| T2.04 | feature_builder: Decision-frame matrix | 10 | T2.03 | [x] |
+| T2.05 | feature_builder: Incremental computation | 8 | T2.04 | [x] |
+| T2.06 | labeler: Forward returns calculation | 8 | T2.04 | [x] |
+| T2.07 | labeler: Direction labels with no-trade band | 6 | T2.06 | [x] |
+| T2.08 | labeler: Net-of-spread returns | 4 | T2.07 | [x] |
+| T2.09 | Unit tests for feature_builder | 4 | T2.05 | [x] |
+| T2.10 | Unit tests for labeler | 2 | T2.08 | [x] |
 
 **Milestone M2:** Feature pipeline operational, labels generated
 
@@ -367,16 +367,16 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 | T1.08 | Historical backfill | ingestor | S1 | 8 | T1.07 | [x] |
 | T1.09 | WebSocket client | ingestor | S1 | 12 | T1.06 | [x] |
 | T1.10 | Ingestor tests | ingestor | S1 | 4 | T1.09 | [x] |
-| T2.01 | Standard bars | feature_builder | S2 | 16 | T1.08 | [ ] |
-| T2.02 | Microstructure bars | feature_builder | S2 | 20 | T1.08 | [ ] |
-| T2.03 | As-of join logic | feature_builder | S2 | 12 | T2.01,T2.02 | [ ] |
-| T2.04 | Decision-frame matrix | feature_builder | S2 | 10 | T2.03 | [ ] |
-| T2.05 | Incremental computation | feature_builder | S2 | 8 | T2.04 | [ ] |
-| T2.06 | Forward returns | labeler | S2 | 8 | T2.04 | [ ] |
-| T2.07 | Direction labels | labeler | S2 | 6 | T2.06 | [ ] |
-| T2.08 | Net-of-spread returns | labeler | S2 | 4 | T2.07 | [ ] |
-| T2.09 | Feature builder tests | feature_builder | S2 | 4 | T2.05 | [ ] |
-| T2.10 | Labeler tests | labeler | S2 | 2 | T2.08 | [ ] |
+| T2.01 | Standard bars | feature_builder | S2 | 16 | T1.08 | [x] |
+| T2.02 | Microstructure bars | feature_builder | S2 | 20 | T1.08 | [x] |
+| T2.03 | As-of join logic | feature_builder | S2 | 12 | T2.01,T2.02 | [x] |
+| T2.04 | Decision-frame matrix | feature_builder | S2 | 10 | T2.03 | [x] |
+| T2.05 | Incremental computation | feature_builder | S2 | 8 | T2.04 | [x] |
+| T2.06 | Forward returns | labeler | S2 | 8 | T2.04 | [x] |
+| T2.07 | Direction labels | labeler | S2 | 6 | T2.06 | [x] |
+| T2.08 | Net-of-spread returns | labeler | S2 | 4 | T2.07 | [x] |
+| T2.09 | Feature builder tests | feature_builder | S2 | 4 | T2.05 | [x] |
+| T2.10 | Labeler tests | labeler | S2 | 2 | T2.08 | [x] |
 | T3.01 | Core simulation loop | backtester | S3 | 16 | T2.04 | [ ] |
 | T3.02 | Quote-based fills | backtester | S3 | 12 | T3.01 | [ ] |
 | T3.03 | Slippage model | backtester | S3 | 8 | T3.02,T1.04 | [ ] |
