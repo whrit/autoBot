@@ -1,0 +1,15 @@
+polars>=1.0.0
+numpy>=1.26.0
+pydantic>=2.0.0
+xgboost>=2.0.0
+onnx>=1.15.0
+onnxruntime>=1.17.0
+skl2onnx>=1.16.0
+scikit-learn>=1.4.0
+onnxmltools>=1.12.0
+
+[dev]
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+ruff>=0.1.0
+mypy>=1.8.0

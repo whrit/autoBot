@@ -141,14 +141,14 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 | **Est. Hours** | 100-120 |
 
 **Key Deliverables:**
-- [ ] Strategy family definitions (trend, mean-reversion, volatility, ML)
-- [ ] Parameter sweep framework
-- [ ] ML model training (XGBoost with optional GPU: `tree_method=gpu_hist`)
-- [ ] ONNX export for ML models
+- [x] Strategy family definitions (trend, mean-reversion, volatility, ML)
+- [x] Parameter sweep framework
+- [x] ML model training (XGBoost with optional GPU: `tree_method=gpu_hist`)
+- [x] ONNX export for ML models
 - [ ] Complexity penalties
-- [ ] Cost sensitivity tests
-- [ ] GPU policy controls (`GPU_ENABLED`, `GPU_DEVICE`, `GPU_FALLBACK_CPU`)
-- [ ] Candidate ranking within families
+- [x] Cost sensitivity tests
+- [x] GPU policy controls (`GPU_ENABLED`, `GPU_DEVICE`, `GPU_FALLBACK_CPU`)
+- [x] Candidate ranking within families
 
 **Dependencies:** backtester_py, registry_api_py
 
@@ -290,18 +290,18 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 
 | Task ID | Task | Est. Hrs | Deps | Status |
 |---------|------|----------|------|--------|
-| T4.01 | optimizer: Strategy family framework | 12 | T3.08 | [ ] |
-| T4.02 | optimizer: Trend strategy implementation | 10 | T4.01 | [ ] |
-| T4.03 | optimizer: Mean-reversion strategy | 10 | T4.01 | [ ] |
-| T4.04 | optimizer: Parameter sweep framework | 12 | T4.02, T4.03 | [ ] |
-| T4.05 | optimizer: XGBoost ML strategy | 14 | T4.04 | [ ] |
-| T4.06 | optimizer: GPU training support | 10 | T4.05 | [ ] |
-| T4.07 | optimizer: CPU fallback logic | 6 | T4.06 | [ ] |
-| T4.08 | optimizer: ONNX export | 8 | T4.05 | [ ] |
-| T4.09 | optimizer: Candidate ranking | 8 | T4.08 | [ ] |
-| T4.10 | optimizer: Cost sensitivity tests | 8 | T4.09 | [ ] |
-| T4.11 | Unit tests for optimizer | 6 | T4.10 | [ ] |
-| T4.12 | GPU metadata logging | 6 | T4.06 | [ ] |
+| T4.01 | optimizer: Strategy family framework | 12 | T3.08 | [x] |
+| T4.02 | optimizer: Trend strategy implementation | 10 | T4.01 | [x] |
+| T4.03 | optimizer: Mean-reversion strategy | 10 | T4.01 | [x] |
+| T4.04 | optimizer: Parameter sweep framework | 12 | T4.02, T4.03 | [x] |
+| T4.05 | optimizer: XGBoost ML strategy | 14 | T4.04 | [x] |
+| T4.06 | optimizer: GPU training support | 10 | T4.05 | [x] |
+| T4.07 | optimizer: CPU fallback logic | 6 | T4.06 | [x] |
+| T4.08 | optimizer: ONNX export | 8 | T4.05 | [x] |
+| T4.09 | optimizer: Candidate ranking | 8 | T4.08 | [x] |
+| T4.10 | optimizer: Cost sensitivity tests | 8 | T4.09 | [x] |
+| T4.11 | Unit tests for optimizer | 6 | T4.10 | [x] |
+| T4.12 | GPU metadata logging | 6 | T4.06 | [x] |
 
 **Milestone M4:** Optimizer generates and ranks candidates
 
@@ -387,18 +387,18 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 | T3.08 | Purged CV | backtester | S3 | 10 | T3.07 | [x] |
 | T3.09 | Integration tests | backtester | S3 | 8 | T3.08 | [x] |
 | T3.10 | Validation vs provider | backtester | S3 | 4 | T3.09 | [x] |
-| T4.01 | Strategy family framework | optimizer | S4 | 12 | T3.08 | [ ] |
-| T4.02 | Trend strategy | optimizer | S4 | 10 | T4.01 | [ ] |
-| T4.03 | Mean-reversion strategy | optimizer | S4 | 10 | T4.01 | [ ] |
-| T4.04 | Parameter sweep | optimizer | S4 | 12 | T4.02,T4.03 | [ ] |
-| T4.05 | XGBoost ML strategy | optimizer | S4 | 14 | T4.04 | [ ] |
-| T4.06 | GPU training support | optimizer | S4 | 10 | T4.05 | [ ] |
-| T4.07 | CPU fallback | optimizer | S4 | 6 | T4.06 | [ ] |
-| T4.08 | ONNX export | optimizer | S4 | 8 | T4.05 | [ ] |
-| T4.09 | Candidate ranking | optimizer | S4 | 8 | T4.08 | [ ] |
-| T4.10 | Cost sensitivity tests | optimizer | S4 | 8 | T4.09 | [ ] |
-| T4.11 | Optimizer tests | optimizer | S4 | 6 | T4.10 | [ ] |
-| T4.12 | GPU metadata logging | optimizer | S4 | 6 | T4.06 | [ ] |
+| T4.01 | Strategy family framework | optimizer | S4 | 12 | T3.08 | [x] |
+| T4.02 | Trend strategy | optimizer | S4 | 10 | T4.01 | [x] |
+| T4.03 | Mean-reversion strategy | optimizer | S4 | 10 | T4.01 | [x] |
+| T4.04 | Parameter sweep | optimizer | S4 | 12 | T4.02,T4.03 | [x] |
+| T4.05 | XGBoost ML strategy | optimizer | S4 | 14 | T4.04 | [x] |
+| T4.06 | GPU training support | optimizer | S4 | 10 | T4.05 | [x] |
+| T4.07 | CPU fallback | optimizer | S4 | 6 | T4.06 | [x] |
+| T4.08 | ONNX export | optimizer | S4 | 8 | T4.05 | [x] |
+| T4.09 | Candidate ranking | optimizer | S4 | 8 | T4.08 | [x] |
+| T4.10 | Cost sensitivity tests | optimizer | S4 | 8 | T4.09 | [x] |
+| T4.11 | Optimizer tests | optimizer | S4 | 6 | T4.10 | [x] |
+| T4.12 | GPU metadata logging | optimizer | S4 | 6 | T4.06 | [x] |
 | T5.01 | Registry CRUD endpoints | registry_api | S5 | 16 | M4 | [ ] |
 | T5.02 | Dataset snapshots | registry_api | S5 | 8 | T5.01 | [ ] |
 | T5.03 | Artifact upload/download | registry_api | S5 | 10 | T5.02 | [ ] |
