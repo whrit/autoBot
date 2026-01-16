@@ -2,6 +2,13 @@
 Feature Builder CLI Entry Point.
 
 Provides a rich console interface for building features across multiple symbols.
+
+Optimized for Large Dataset Processing:
+- Lazy evaluation with scan_parquet() for memory efficiency
+- Batch processing for datasets larger than available memory
+- Streaming/chunked reading of parquet files
+- Progress logging for long-running computations
+- Memory-mapped file access for optimal I/O performance
 """
 
 import argparse
@@ -10,7 +17,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import polars as pl
 import structlog
@@ -25,11 +32,21 @@ from rich.progress import (
     TaskID,
     TextColumn,
     TimeElapsedColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
 )
 from rich.table import Table
 from rich.text import Text
 
 from feature_builder_py.bars import StandardBarBuilder
+from feature_builder_py.data_loader import (
+    BatchProcessor,
+    LazyDataLoader,
+    LoaderConfig,
+    estimate_memory_usage,
+    get_parquet_metadata,
+    scan_lake_directory,
+)
 from feature_builder_py.decision_frame import DecisionFrameBuilder
 from feature_builder_py.micro_bars import MicrostructureBarBuilder
 
@@ -149,19 +166,135 @@ class FeatureBuilderCLI:
         console.print(config_table)
         console.print()
 
-    def _load_trades(self, symbol: str) -> pl.DataFrame:
-        """Load trade data for a symbol."""
+    def _load_trades(
+        self,
+        symbol: str,
+        lazy: bool = False,
+    ) -> pl.DataFrame | pl.LazyFrame:
+        """
+        Load trade data for a symbol with optimized settings.
+
+        Uses lazy evaluation with scan_parquet() for memory efficiency.
+        Supports memory-mapped file access and predicate pushdown.
+
+        Args:
+            symbol: Stock symbol to load.
+            lazy: If True, return LazyFrame for deferred computation.
+
+        Returns:
+            DataFrame or LazyFrame with trade data.
+        """
         trade_path = self.data_dir / f"{symbol}_trades.parquet"
+
         if trade_path.exists():
-            return pl.read_parquet(trade_path)
+            self._log.info(
+                "loading_trades",
+                symbol=symbol,
+                path=str(trade_path),
+                lazy=lazy,
+            )
+
+            if lazy:
+                # Use scan_parquet for lazy evaluation
+                lf = pl.scan_parquet(
+                    trade_path,
+                    memory_map=True,  # Memory-mapped for better I/O
+                    low_memory=False,
+                )
+
+                # Apply date filtering with predicate pushdown
+                if self.start_date:
+                    start_dt = datetime.fromisoformat(f"{self.start_date}T00:00:00")
+                    lf = lf.filter(pl.col("ts_event") >= start_dt)
+                if self.end_date:
+                    end_dt = datetime.fromisoformat(f"{self.end_date}T23:59:59")
+                    lf = lf.filter(pl.col("ts_event") <= end_dt)
+
+                return lf
+            else:
+                # Collect with streaming for large files
+                lf = pl.scan_parquet(trade_path, memory_map=True)
+
+                # Apply date filtering with predicate pushdown
+                if self.start_date:
+                    start_dt = datetime.fromisoformat(f"{self.start_date}T00:00:00")
+                    lf = lf.filter(pl.col("ts_event") >= start_dt)
+                if self.end_date:
+                    end_dt = datetime.fromisoformat(f"{self.end_date}T23:59:59")
+                    lf = lf.filter(pl.col("ts_event") <= end_dt)
+
+                try:
+                    # Use streaming engine for large datasets
+                    return lf.collect(streaming=True)
+                except Exception:
+                    # Fallback to regular collection
+                    return lf.collect()
+
         # Return sample data for demonstration
         return self._generate_sample_trades(symbol)
 
-    def _load_quotes(self, symbol: str) -> pl.DataFrame:
-        """Load quote data for a symbol."""
+    def _load_quotes(
+        self,
+        symbol: str,
+        lazy: bool = False,
+    ) -> pl.DataFrame | pl.LazyFrame:
+        """
+        Load quote data for a symbol with optimized settings.
+
+        Uses lazy evaluation with scan_parquet() for memory efficiency.
+        Supports memory-mapped file access and predicate pushdown.
+
+        Args:
+            symbol: Stock symbol to load.
+            lazy: If True, return LazyFrame for deferred computation.
+
+        Returns:
+            DataFrame or LazyFrame with quote data.
+        """
         quote_path = self.data_dir / f"{symbol}_quotes.parquet"
+
         if quote_path.exists():
-            return pl.read_parquet(quote_path)
+            self._log.info(
+                "loading_quotes",
+                symbol=symbol,
+                path=str(quote_path),
+                lazy=lazy,
+            )
+
+            if lazy:
+                # Use scan_parquet for lazy evaluation
+                lf = pl.scan_parquet(
+                    quote_path,
+                    memory_map=True,
+                    low_memory=False,
+                )
+
+                # Apply date filtering with predicate pushdown
+                if self.start_date:
+                    start_dt = datetime.fromisoformat(f"{self.start_date}T00:00:00")
+                    lf = lf.filter(pl.col("ts_event") >= start_dt)
+                if self.end_date:
+                    end_dt = datetime.fromisoformat(f"{self.end_date}T23:59:59")
+                    lf = lf.filter(pl.col("ts_event") <= end_dt)
+
+                return lf
+            else:
+                # Collect with streaming for large files
+                lf = pl.scan_parquet(quote_path, memory_map=True)
+
+                # Apply date filtering with predicate pushdown
+                if self.start_date:
+                    start_dt = datetime.fromisoformat(f"{self.start_date}T00:00:00")
+                    lf = lf.filter(pl.col("ts_event") >= start_dt)
+                if self.end_date:
+                    end_dt = datetime.fromisoformat(f"{self.end_date}T23:59:59")
+                    lf = lf.filter(pl.col("ts_event") <= end_dt)
+
+                try:
+                    return lf.collect(streaming=True)
+                except Exception:
+                    return lf.collect()
+
         # Return sample data for demonstration
         return self._generate_sample_quotes(symbol)
 
@@ -447,6 +580,269 @@ class FeatureBuilderCLI:
             console.print(detail_table)
 
 
+class LargeDatasetBuilder:
+    """
+    Optimized builder for processing large parquet datasets.
+
+    Uses lazy evaluation, batch processing, and streaming to
+    efficiently process datasets larger than available memory.
+    """
+
+    def __init__(
+        self,
+        data_dir: Path | str,
+        output_dir: Path | str,
+        batch_size: int = 1_000_000,
+        verbose: bool = False,
+    ) -> None:
+        """
+        Initialize the large dataset builder.
+
+        Args:
+            data_dir: Directory containing input parquet files.
+            output_dir: Directory for output files.
+            batch_size: Number of rows per batch for chunked processing.
+            verbose: Enable verbose logging.
+        """
+        self.data_dir = Path(data_dir)
+        self.output_dir = Path(output_dir)
+        self.batch_size = batch_size
+        self.verbose = verbose
+
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        self._log = logger.bind(
+            component="LargeDatasetBuilder",
+            batch_size=batch_size,
+        )
+
+        # Initialize data loader with optimized config
+        self.loader = LazyDataLoader(
+            LoaderConfig(
+                batch_size=batch_size,
+                use_memory_map=True,
+                enable_progress=True,
+            )
+        )
+
+        # Initialize builders
+        self.bar_builders = {
+            "1m": StandardBarBuilder(granularity="1m"),
+            "5m": StandardBarBuilder(granularity="5m"),
+            "15m": StandardBarBuilder(granularity="15m"),
+        }
+        self.micro_builder = MicrostructureBarBuilder(granularity="30s")
+        self.decision_builder = DecisionFrameBuilder()
+
+    def process_symbol_lazy(
+        self,
+        symbol: str,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        progress_callback: Callable[[str, int, int], None] | None = None,
+    ) -> dict[str, pl.DataFrame]:
+        """
+        Process a symbol using lazy evaluation for memory efficiency.
+
+        Uses scan_parquet() to build a query plan that is optimized
+        before execution. Only loads data needed for each operation.
+
+        Args:
+            symbol: Stock symbol to process.
+            start_date: Optional start date filter.
+            end_date: Optional end date filter.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            Dictionary of computed features.
+        """
+        self._log.info(
+            "processing_symbol_lazy",
+            symbol=symbol,
+            start_date=str(start_date) if start_date else None,
+            end_date=str(end_date) if end_date else None,
+        )
+
+        results = {}
+        trade_path = self.data_dir / f"{symbol}_trades.parquet"
+        quote_path = self.data_dir / f"{symbol}_quotes.parquet"
+
+        # Check file sizes to determine processing strategy
+        if trade_path.exists():
+            trade_stats = estimate_memory_usage(trade_path)
+            self._log.info(
+                "trade_file_stats",
+                symbol=symbol,
+                rows=trade_stats["row_count"],
+                file_mb=round(trade_stats["file_size_mb"], 2),
+                estimated_memory_mb=round(trade_stats["estimated_memory_mb"], 2),
+            )
+
+            # Use lazy scanning
+            trades_lf = self.loader.scan_trades(trade_path)
+
+            # Apply date filters
+            if start_date:
+                trades_lf = trades_lf.filter(pl.col("ts_event") >= start_date)
+            if end_date:
+                trades_lf = trades_lf.filter(pl.col("ts_event") <= end_date)
+
+            # Collect with streaming
+            if progress_callback:
+                progress_callback(f"{symbol}_trades", 0, 1)
+
+            try:
+                trades = trades_lf.collect(streaming=True)
+            except Exception:
+                trades = trades_lf.collect()
+
+            if progress_callback:
+                progress_callback(f"{symbol}_trades", 1, 1)
+
+            # Build bars
+            for timeframe, builder in self.bar_builders.items():
+                self._log.info(
+                    "building_bars",
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    input_rows=len(trades),
+                )
+
+                if progress_callback:
+                    progress_callback(f"{symbol}_{timeframe}", 0, 1)
+
+                bars = builder.build(trades, symbol)
+                results[f"bars_{timeframe}"] = bars
+
+                if progress_callback:
+                    progress_callback(f"{symbol}_{timeframe}", 1, 1)
+
+                self._log.info(
+                    "bars_built",
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    output_rows=len(bars),
+                )
+
+        # Process quotes
+        if quote_path.exists():
+            quotes_lf = self.loader.scan_quotes(quote_path)
+
+            if start_date:
+                quotes_lf = quotes_lf.filter(pl.col("ts_event") >= start_date)
+            if end_date:
+                quotes_lf = quotes_lf.filter(pl.col("ts_event") <= end_date)
+
+            if progress_callback:
+                progress_callback(f"{symbol}_quotes", 0, 1)
+
+            try:
+                quotes = quotes_lf.collect(streaming=True)
+            except Exception:
+                quotes = quotes_lf.collect()
+
+            if progress_callback:
+                progress_callback(f"{symbol}_quotes", 1, 1)
+
+            # Build micro bars
+            if trade_path.exists():
+                self._log.info(
+                    "building_micro_bars",
+                    symbol=symbol,
+                    trade_rows=len(trades),
+                    quote_rows=len(quotes),
+                )
+
+                if progress_callback:
+                    progress_callback(f"{symbol}_micro", 0, 1)
+
+                micro_bars = self.micro_builder.build(trades, quotes, symbol)
+                results["micro_bars"] = micro_bars
+
+                if progress_callback:
+                    progress_callback(f"{symbol}_micro", 1, 1)
+
+                self._log.info(
+                    "micro_bars_built",
+                    symbol=symbol,
+                    output_rows=len(micro_bars),
+                )
+
+        return results
+
+    def process_symbol_batched(
+        self,
+        symbol: str,
+        progress_callback: Callable[[str, int, int], None] | None = None,
+    ) -> dict[str, Path]:
+        """
+        Process a symbol in batches for very large datasets.
+
+        Splits the data into batches, processes each batch separately,
+        and writes results incrementally to avoid memory issues.
+
+        Args:
+            symbol: Stock symbol to process.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            Dictionary mapping feature type to output file path.
+        """
+        self._log.info(
+            "processing_symbol_batched",
+            symbol=symbol,
+            batch_size=self.batch_size,
+        )
+
+        trade_path = self.data_dir / f"{symbol}_trades.parquet"
+        output_paths = {}
+
+        if not trade_path.exists():
+            self._log.warning("trade_file_not_found", path=str(trade_path))
+            return output_paths
+
+        batch_processor = BatchProcessor(
+            batch_size=self.batch_size,
+            progress_callback=lambda curr, total, desc: (
+                progress_callback(f"{symbol}_{desc}", curr, total)
+                if progress_callback
+                else None
+            ),
+        )
+
+        # Process each timeframe
+        for timeframe, builder in self.bar_builders.items():
+            output_path = self.output_dir / f"{symbol}_bars_{timeframe}.parquet"
+
+            self._log.info(
+                "batch_processing_bars",
+                symbol=symbol,
+                timeframe=timeframe,
+                output_path=str(output_path),
+            )
+
+            def process_batch(batch: pl.DataFrame) -> pl.DataFrame:
+                return builder.build(batch, symbol)
+
+            batch_processor.process_batches(
+                trade_path,
+                process_fn=process_batch,
+                output_path=output_path,
+                sort_by="ts_event",
+            )
+
+            output_paths[f"bars_{timeframe}"] = output_path
+
+            self._log.info(
+                "batch_processing_completed",
+                symbol=symbol,
+                timeframe=timeframe,
+                output_path=str(output_path),
+            )
+
+        return output_paths
+
+
 def main(args: list[str] | None = None) -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -457,6 +853,7 @@ Examples:
   feature-builder SPY QQQ
   feature-builder SPY --start-date 2025-10-01 --end-date 2025-12-31
   feature-builder SPY QQQ IWM --verbose
+  feature-builder SPY --batch-size 500000 --large-dataset
         """,
     )
     parser.add_argument(
@@ -489,19 +886,81 @@ Examples:
         action="store_true",
         help="Enable verbose output",
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1_000_000,
+        help="Batch size for large dataset processing (default: 1,000,000)",
+    )
+    parser.add_argument(
+        "--large-dataset",
+        action="store_true",
+        help="Use batch processing mode for very large datasets",
+    )
+    parser.add_argument(
+        "--lazy",
+        action="store_true",
+        help="Use lazy evaluation mode (memory efficient)",
+    )
+    parser.add_argument(
+        "--streaming",
+        action="store_true",
+        help="Use streaming collection for large files",
+    )
 
     parsed = parser.parse_args(args)
 
     try:
-        cli = FeatureBuilderCLI(
-            symbols=parsed.symbols,
-            start_date=parsed.start_date,
-            end_date=parsed.end_date,
-            data_dir=parsed.data_dir,
-            output_dir=parsed.output_dir,
-            verbose=parsed.verbose,
-        )
-        cli.build_all()
+        if parsed.large_dataset:
+            # Use batched processing for very large datasets
+            builder = LargeDatasetBuilder(
+                data_dir=parsed.data_dir,
+                output_dir=parsed.output_dir,
+                batch_size=parsed.batch_size,
+                verbose=parsed.verbose,
+            )
+
+            console.print("[bold]Large Dataset Mode[/bold]")
+            console.print(f"Batch size: {parsed.batch_size:,} rows")
+            console.print()
+
+            for symbol in parsed.symbols:
+                console.print(f"Processing {symbol}...")
+                start_date = (
+                    datetime.fromisoformat(parsed.start_date)
+                    if parsed.start_date
+                    else None
+                )
+                end_date = (
+                    datetime.fromisoformat(parsed.end_date)
+                    if parsed.end_date
+                    else None
+                )
+
+                if parsed.lazy:
+                    results = builder.process_symbol_lazy(
+                        symbol,
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
+                    console.print(f"  Processed {len(results)} feature types")
+                else:
+                    paths = builder.process_symbol_batched(symbol)
+                    console.print(f"  Output files: {len(paths)}")
+
+            console.print("[bold green]Processing complete[/bold green]")
+        else:
+            # Use standard CLI
+            cli = FeatureBuilderCLI(
+                symbols=parsed.symbols,
+                start_date=parsed.start_date,
+                end_date=parsed.end_date,
+                data_dir=parsed.data_dir,
+                output_dir=parsed.output_dir,
+                verbose=parsed.verbose,
+            )
+            cli.build_all()
+
         return 0
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user[/yellow]")

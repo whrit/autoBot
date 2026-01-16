@@ -4,13 +4,16 @@ Backfill Orchestrator - Coordinate historical data ingestion.
 Handles downloading historical trades, quotes, and bars from Alpaca
 and writing them to partitioned Parquet files with comprehensive
 logging and progress tracking.
+
+Optimized for streaming writes with day-by-day processing and
+real-time progress updates showing throughput and current status.
 """
 
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from rich.progress import (
     BarColumn,
@@ -20,6 +23,7 @@ from rich.progress import (
     TaskID,
     TextColumn,
     TimeElapsedColumn,
+    TimeRemainingColumn,
 )
 
 from ingestor_py.client import AlpacaDataClient
@@ -57,6 +61,9 @@ class SymbolStats:
     quotes_count: int = 0
     bars_count: int = 0
     bytes_written: int = 0
+    days_completed: int = 0
+    total_days: int = 0
+    current_day: str = ""
     start_time: float = field(default_factory=time.time)
     end_time: float | None = None
 
@@ -77,6 +84,11 @@ class SymbolStats:
         if self.elapsed == 0:
             return 0.0
         return self.total_records / self.elapsed
+
+    @property
+    def days_progress(self) -> str:
+        """Get days progress as string."""
+        return f"{self.days_completed}/{self.total_days}"
 
 
 @dataclass
@@ -164,6 +176,31 @@ class BackfillOrchestrator:
             feed=feed,
         )
 
+    def _iter_days(
+        self,
+        start: datetime,
+        end: datetime,
+    ) -> list[tuple[datetime, datetime]]:
+        """Generate day-by-day date ranges for streaming processing.
+
+        Args:
+            start: Start datetime.
+            end: End datetime.
+
+        Returns:
+            List of (day_start, day_end) tuples for each day in range.
+        """
+        days: list[tuple[datetime, datetime]] = []
+        current = start.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        while current < end:
+            day_start = current
+            day_end = min(current + timedelta(days=1), end)
+            days.append((day_start, day_end))
+            current = day_end
+
+        return days
+
     def _create_progress(self) -> ProgressType:
         """Create a progress tracker for backfill tracking.
 
@@ -172,20 +209,24 @@ class BackfillOrchestrator:
         """
         if is_file_mode():
             logger.debug("using_file_progress_mode")
-            return FileProgress(log_interval=30.0, console=console)
+            return FileProgress(log_interval=10.0, console=console)
 
         return Progress(
             SpinnerColumn(),
             TextColumn("[bold blue]{task.fields[symbol]}"),
-            BarColumn(bar_width=40),
+            BarColumn(bar_width=30),
             MofNCompleteColumn(),
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
             TextColumn("[dim]|"),
-            TextColumn("[green]{task.fields[trades]}[/] trades"),
+            TextColumn("[yellow]{task.fields[current_day]}[/]"),
             TextColumn("[dim]|"),
-            TextColumn("[cyan]{task.fields[quotes]}[/] quotes"),
+            TextColumn("[green]{task.fields[records]}[/] rec"),
+            TextColumn("[dim]|"),
+            TextColumn("[magenta]{task.fields[throughput]}[/]/s"),
             TextColumn("[dim]|"),
             TimeElapsedColumn(),
+            TextColumn("[dim]ETA"),
+            TimeRemainingColumn(),
             console=console,
             expand=False,
         )
@@ -488,6 +529,9 @@ class BackfillOrchestrator:
     ) -> BackfillStats:
         """Backfill historical data with Rich progress display.
 
+        Processes data DAY BY DAY with streaming writes and real-time
+        progress updates showing current day, records fetched, and throughput.
+
         Args:
             symbols: List of stock symbols to backfill.
             start: Start datetime.
@@ -501,11 +545,19 @@ class BackfillOrchestrator:
             data_types = ["trades", "quotes", "bars"]
 
         self.stats = BackfillStats()
-        num_data_types = len(data_types)
 
-        # Initialize symbol stats
+        # Calculate total days for progress tracking
+        days = self._iter_days(start, end)
+        total_days = len(days)
+        # Progress is tracked per day per data type per symbol
+        total_steps = total_days * len(data_types)
+
+        # Initialize symbol stats with day tracking
         for symbol in symbols:
-            self.stats.symbols[symbol] = SymbolStats(symbol=symbol)
+            self.stats.symbols[symbol] = SymbolStats(
+                symbol=symbol,
+                total_days=total_days,
+            )
 
         logger.info(
             "backfill_started",
@@ -513,45 +565,109 @@ class BackfillOrchestrator:
             start=start.isoformat(),
             end=end.isoformat(),
             data_types=data_types,
+            total_days=total_days,
         )
 
-        console.print("\n[bold]Backfill Progress[/bold]")
+        console.print(
+            f"\n[bold]Backfill Progress[/bold] "
+            f"({total_days} days x {len(data_types)} types x {len(symbols)} symbols)"
+        )
 
         progress = self._create_progress()
 
         with progress:
             for symbol in symbols:
+                symbol_stats = self.stats.symbols[symbol]
+
                 task_id = progress.add_task(
                     f"Processing {symbol}",
-                    total=num_data_types,
+                    total=total_steps,
                     symbol=symbol,
-                    trades="0",
-                    quotes="0",
+                    current_day="starting...",
+                    records="0",
+                    throughput="0",
                 )
 
                 try:
-                    if "trades" in data_types:
-                        self._backfill_symbol_trades(
-                            symbol, start, end, progress, task_id
+                    # Process each day sequentially for streaming writes
+                    for day_idx, (day_start, day_end) in enumerate(days):
+                        day_str = day_start.strftime("%Y-%m-%d")
+                        symbol_stats.current_day = day_str
+
+                        # Update progress with current day
+                        progress.update(
+                            task_id,
+                            current_day=day_str,
+                            records=format_number(symbol_stats.total_records),
+                            throughput=format_number(int(symbol_stats.throughput)),
                         )
-                        progress.advance(task_id)
 
-                    if "quotes" in data_types:
-                        self._backfill_symbol_quotes(
-                            symbol, start, end, progress, task_id
+                        log = logger.bind(symbol=symbol, day=day_str)
+
+                        # Process each data type for this day
+                        if "trades" in data_types:
+                            day_trades = self._fetch_and_write_day_trades(
+                                symbol, day_start, day_end, log
+                            )
+                            progress.update(
+                                task_id,
+                                records=format_number(symbol_stats.total_records),
+                                throughput=format_number(int(symbol_stats.throughput)),
+                            )
+                            progress.advance(task_id)
+
+                        if "quotes" in data_types:
+                            day_quotes = self._fetch_and_write_day_quotes(
+                                symbol, day_start, day_end, log
+                            )
+                            progress.update(
+                                task_id,
+                                records=format_number(symbol_stats.total_records),
+                                throughput=format_number(int(symbol_stats.throughput)),
+                            )
+                            progress.advance(task_id)
+
+                        if "bars" in data_types:
+                            day_bars = self._fetch_and_write_day_bars(
+                                symbol, day_start, day_end, log
+                            )
+                            progress.update(
+                                task_id,
+                                records=format_number(symbol_stats.total_records),
+                                throughput=format_number(int(symbol_stats.throughput)),
+                            )
+                            progress.advance(task_id)
+
+                        # Track days completed
+                        symbol_stats.days_completed = day_idx + 1
+
+                        log.debug(
+                            "day_complete",
+                            day=day_str,
+                            days_progress=symbol_stats.days_progress,
+                            total_records=symbol_stats.total_records,
+                            throughput=f"{symbol_stats.throughput:.0f}/s",
                         )
-                        progress.advance(task_id)
 
-                    if "bars" in data_types:
-                        self._backfill_symbol_bars(symbol, start, end)
-                        progress.advance(task_id)
+                    symbol_stats.end_time = time.time()
 
-                    self.stats.symbols[symbol].end_time = time.time()
+                    logger.info(
+                        "symbol_backfill_complete",
+                        symbol=symbol,
+                        trades=symbol_stats.trades_count,
+                        quotes=symbol_stats.quotes_count,
+                        bars=symbol_stats.bars_count,
+                        bytes_written=format_bytes(symbol_stats.bytes_written),
+                        elapsed=format_duration(symbol_stats.elapsed),
+                        throughput=f"{symbol_stats.throughput:.0f}/s",
+                    )
 
                 except Exception as e:
                     logger.error(
                         "backfill_symbol_error",
                         symbol=symbol,
+                        current_day=symbol_stats.current_day,
+                        days_completed=symbol_stats.days_completed,
                         error=str(e),
                         exc_info=True,
                     )
@@ -564,12 +680,141 @@ class BackfillOrchestrator:
             total_trades=self.stats.total_trades,
             total_quotes=self.stats.total_quotes,
             total_bars=self.stats.total_bars,
-            total_bytes=self.stats.total_bytes,
+            total_bytes=format_bytes(self.stats.total_bytes),
             elapsed=format_duration(self.stats.elapsed),
             avg_throughput=f"{self.stats.avg_throughput:.0f} records/sec",
         )
 
         return self.stats
+
+    def _fetch_and_write_day_trades(
+        self,
+        symbol: str,
+        day_start: datetime,
+        day_end: datetime,
+        log: Any,
+    ) -> int:
+        """Fetch and write trades for a single day (streaming).
+
+        Args:
+            symbol: Stock symbol.
+            day_start: Day start datetime.
+            day_end: Day end datetime.
+            log: Bound logger with context.
+
+        Returns:
+            Number of trades written.
+        """
+        fetch_start = time.time()
+        trades = list(self.client.get_trades(symbol, day_start, day_end))
+        fetch_elapsed = time.time() - fetch_start
+
+        if not trades:
+            return 0
+
+        write_start = time.time()
+        bytes_written = self.writer.write_trades(trades)
+        write_elapsed = time.time() - write_start
+
+        # Update stats
+        self.stats.symbols[symbol].trades_count += len(trades)
+        self.stats.symbols[symbol].bytes_written += bytes_written
+
+        log.debug(
+            "day_trades_written",
+            count=len(trades),
+            bytes=format_bytes(bytes_written),
+            fetch_time=f"{fetch_elapsed:.2f}s",
+            write_time=f"{write_elapsed:.2f}s",
+        )
+
+        return len(trades)
+
+    def _fetch_and_write_day_quotes(
+        self,
+        symbol: str,
+        day_start: datetime,
+        day_end: datetime,
+        log: Any,
+    ) -> int:
+        """Fetch and write quotes for a single day (streaming).
+
+        Args:
+            symbol: Stock symbol.
+            day_start: Day start datetime.
+            day_end: Day end datetime.
+            log: Bound logger with context.
+
+        Returns:
+            Number of quotes written.
+        """
+        fetch_start = time.time()
+        quotes = list(self.client.get_quotes(symbol, day_start, day_end))
+        fetch_elapsed = time.time() - fetch_start
+
+        if not quotes:
+            return 0
+
+        write_start = time.time()
+        bytes_written = self.writer.write_quotes(quotes)
+        write_elapsed = time.time() - write_start
+
+        # Update stats
+        self.stats.symbols[symbol].quotes_count += len(quotes)
+        self.stats.symbols[symbol].bytes_written += bytes_written
+
+        log.debug(
+            "day_quotes_written",
+            count=len(quotes),
+            bytes=format_bytes(bytes_written),
+            fetch_time=f"{fetch_elapsed:.2f}s",
+            write_time=f"{write_elapsed:.2f}s",
+        )
+
+        return len(quotes)
+
+    def _fetch_and_write_day_bars(
+        self,
+        symbol: str,
+        day_start: datetime,
+        day_end: datetime,
+        log: Any,
+    ) -> int:
+        """Fetch and write bars for a single day (streaming).
+
+        Args:
+            symbol: Stock symbol.
+            day_start: Day start datetime.
+            day_end: Day end datetime.
+            log: Bound logger with context.
+
+        Returns:
+            Number of bars written.
+        """
+        fetch_start = time.time()
+        bars = list(self.client.get_bars(symbol, day_start, day_end))
+        fetch_elapsed = time.time() - fetch_start
+
+        if not bars:
+            return 0
+
+        write_start = time.time()
+        bytes_written = self.writer.write_bars(bars)
+        write_elapsed = time.time() - write_start
+
+        # Update stats
+        self.stats.symbols[symbol].bars_count += len(bars)
+        self.stats.symbols[symbol].bytes_written += bytes_written
+
+        log.debug(
+            "day_bars_written",
+            count=len(bars),
+            bytes=format_bytes(bytes_written),
+            fetch_time=f"{fetch_elapsed:.2f}s",
+            write_time=f"{write_elapsed:.2f}s",
+        )
+
+        return len(bars)
 
     def backfill_date_range(
         self,

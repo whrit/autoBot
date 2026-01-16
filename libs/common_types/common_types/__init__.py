@@ -360,6 +360,26 @@ class Artifact(BaseModel):
 
 
 # =============================================================================
+# MEMORY UTILITIES
+# =============================================================================
+
+from common_types.memory_utils import (
+    BatchConfig as MemoryBatchConfig,
+    LimitedSizeList,
+    MemoryStats,
+    MemoryTracker,
+    chunked_iterator,
+    format_bytes,
+    gc_context,
+    get_memory_usage_bytes,
+    get_memory_usage_mb,
+    iter_batches,
+    iter_batches_with_progress,
+    process_in_batches,
+)
+
+
+# =============================================================================
 # EXPORTS
 # =============================================================================
 
@@ -388,4 +408,17 @@ __all__ = [
     "InferencePreferences",
     "OnnxMetadata",
     "Artifact",
+    # Memory Utilities
+    "MemoryBatchConfig",
+    "MemoryStats",
+    "MemoryTracker",
+    "LimitedSizeList",
+    "get_memory_usage_mb",
+    "get_memory_usage_bytes",
+    "format_bytes",
+    "iter_batches",
+    "iter_batches_with_progress",
+    "process_in_batches",
+    "chunked_iterator",
+    "gc_context",
 ]

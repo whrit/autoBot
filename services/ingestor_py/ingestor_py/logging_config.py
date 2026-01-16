@@ -149,6 +149,9 @@ class FileProgressTask:
     trades: int = 0
     quotes: int = 0
     bars: int = 0
+    records: int = 0
+    current_day: str = ""
+    throughput: int = 0
     start_time: float = field(default_factory=time.time)
     last_log_time: float = field(default_factory=time.time)
 
@@ -225,15 +228,21 @@ class FileProgress:
         trades: str | None = None,
         quotes: str | None = None,
         bars: str | None = None,
+        current_day: str | None = None,
+        records: str | None = None,
+        throughput: str | None = None,
         **fields: Any,
     ) -> None:
-        """Update task fields (trades, quotes counts).
+        """Update task fields (trades, quotes counts, current day, etc).
 
         Args:
             task_id: Task ID from add_task.
             trades: Formatted trades count string.
             quotes: Formatted quotes count string.
             bars: Formatted bars count string.
+            current_day: Current day being processed (YYYY-MM-DD).
+            records: Formatted total records count string.
+            throughput: Formatted throughput string.
         """
         if task_id not in self._tasks:
             return
@@ -243,6 +252,12 @@ class FileProgress:
             task.trades = self._parse_count(trades)
         if quotes is not None:
             task.quotes = self._parse_count(quotes)
+        if current_day is not None:
+            task.current_day = current_day
+        if records is not None:
+            task.records = self._parse_count(records)
+        if throughput is not None:
+            task.throughput = self._parse_count(throughput)
 
     def _parse_count(self, formatted: str) -> int:
         """Parse a formatted count back to int."""
@@ -287,16 +302,27 @@ class FileProgress:
         """
         elapsed = time.time() - task.start_time
         pct = (task.completed / task.total * 100) if task.total > 0 else 0
-        rate = (task.trades + task.quotes) / elapsed if elapsed > 0 else 0
+
+        # Use stored throughput if available, otherwise calculate from trades+quotes
+        if task.throughput > 0:
+            rate = task.throughput
+        else:
+            rate = int((task.trades + task.quotes) / elapsed) if elapsed > 0 else 0
+
+        # Use records count if available, otherwise sum trades+quotes
+        total_records = task.records if task.records > 0 else (task.trades + task.quotes)
 
         status = "[green]Complete[/green]" if final and task.completed >= task.total else "[yellow]Running[/yellow]"
+
+        # Build day info if available
+        day_info = f"[yellow]{task.current_day}[/yellow] | " if task.current_day else ""
 
         self._console.print(
             f"[bold]{task.description}[/bold] "
             f"[{status}] "
             f"{task.completed}/{task.total} ({pct:.0f}%) "
-            f"| [green]{format_number(task.trades)}[/green] trades "
-            f"| [cyan]{format_number(task.quotes)}[/cyan] quotes "
-            f"| {format_number(int(rate))}/s "
+            f"| {day_info}"
+            f"[green]{format_number(total_records)}[/green] records "
+            f"| [magenta]{format_number(rate)}[/magenta]/s "
             f"| {format_duration(elapsed)}"
         )

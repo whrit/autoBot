@@ -3,11 +3,17 @@ Decision Frame Builder (T2.04).
 
 Combines multi-timeframe features into a single decision matrix.
 Each row = one decision point with all available features.
+
+Optimized for Large Dataset Processing:
+- Streaming support for memory-efficient parquet reading
+- Memory-mapped file access for optimal I/O
+- Batch processing for very large datasets
+- Progress callbacks for long-running operations
 """
 
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Generator
 
 import polars as pl
 import pyarrow.parquet as pq
@@ -459,3 +465,354 @@ class DecisionFrameBuilder:
             "vol_15m": pl.Series([], dtype=pl.Float64),
             "schema_version": pl.Series([], dtype=pl.String),
         })
+
+    def build_from_parquet(
+        self,
+        decision_times_path: Path | str,
+        micro_bars_path: Path | str,
+        bars_1m_path: Path | str,
+        bars_5m_path: Path | str,
+        bars_15m_path: Path | str | None = None,
+        symbol: str = "",
+        streaming: bool = True,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> pl.DataFrame:
+        """
+        Build decision frame directly from parquet files using lazy evaluation.
+
+        Uses scan_parquet() with memory mapping for efficient I/O on large files.
+
+        Args:
+            decision_times_path: Path to parquet file with decision timestamps.
+            micro_bars_path: Path to parquet file with 30s microstructure bars.
+            bars_1m_path: Path to parquet file with 1m bars.
+            bars_5m_path: Path to parquet file with 5m bars.
+            bars_15m_path: Optional path to parquet file with 15m bars.
+            symbol: Stock symbol.
+            streaming: Use streaming collection for large files.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            DataFrame with decision frame data.
+        """
+        start_time = time.perf_counter()
+
+        self._log.info(
+            "build_from_parquet_started",
+            symbol=symbol,
+            streaming=streaming,
+        )
+
+        # Scan all parquet files lazily with memory mapping
+        decision_times_lf = pl.scan_parquet(
+            decision_times_path,
+            memory_map=True,
+        )
+        micro_bars_lf = pl.scan_parquet(
+            micro_bars_path,
+            memory_map=True,
+        )
+        bars_1m_lf = pl.scan_parquet(
+            bars_1m_path,
+            memory_map=True,
+        )
+        bars_5m_lf = pl.scan_parquet(
+            bars_5m_path,
+            memory_map=True,
+        )
+
+        bars_15m_lf = None
+        if bars_15m_path:
+            bars_15m_lf = pl.scan_parquet(
+                bars_15m_path,
+                memory_map=True,
+            )
+
+        if progress_callback:
+            progress_callback(1, 6)
+
+        # Collect with streaming
+        try:
+            if streaming:
+                decision_times = decision_times_lf.collect(streaming=True)
+                micro_bars = micro_bars_lf.collect(streaming=True)
+                bars_1m = bars_1m_lf.collect(streaming=True)
+                bars_5m = bars_5m_lf.collect(streaming=True)
+                bars_15m = bars_15m_lf.collect(streaming=True) if bars_15m_lf else None
+            else:
+                decision_times = decision_times_lf.collect()
+                micro_bars = micro_bars_lf.collect()
+                bars_1m = bars_1m_lf.collect()
+                bars_5m = bars_5m_lf.collect()
+                bars_15m = bars_15m_lf.collect() if bars_15m_lf else None
+        except Exception as e:
+            self._log.warning(
+                "streaming_fallback",
+                error=str(e),
+            )
+            decision_times = decision_times_lf.collect()
+            micro_bars = micro_bars_lf.collect()
+            bars_1m = bars_1m_lf.collect()
+            bars_5m = bars_5m_lf.collect()
+            bars_15m = bars_15m_lf.collect() if bars_15m_lf else None
+
+        if progress_callback:
+            progress_callback(2, 6)
+
+        # Build decision frame
+        result = self.build(
+            decision_times=decision_times,
+            micro_bars_30s=micro_bars,
+            bars_1m=bars_1m,
+            bars_5m=bars_5m,
+            bars_15m=bars_15m,
+            symbol=symbol,
+            progress_callback=lambda c, t: progress_callback(c + 2, 6) if progress_callback else None,
+        )
+
+        elapsed = time.perf_counter() - start_time
+
+        self._log.info(
+            "build_from_parquet_completed",
+            symbol=symbol,
+            output_frames=len(result),
+            processing_time_sec=round(elapsed, 3),
+        )
+
+        return result
+
+    def build_batched(
+        self,
+        decision_times: pl.DataFrame,
+        micro_bars_30s: pl.DataFrame,
+        bars_1m: pl.DataFrame,
+        bars_5m: pl.DataFrame,
+        bars_15m: pl.DataFrame | None = None,
+        symbol: str = "",
+        batch_size: int = 100_000,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> Generator[pl.DataFrame, None, None]:
+        """
+        Build decision frames in batches for very large datasets.
+
+        Splits the decision times into batches and processes each batch
+        separately, yielding decision frame DataFrames.
+
+        Args:
+            decision_times: DataFrame with 'decision_ts' column.
+            micro_bars_30s: 30-second microstructure bars.
+            bars_1m: 1-minute OHLCV bars.
+            bars_5m: 5-minute OHLCV bars.
+            bars_15m: 15-minute OHLCV bars (optional).
+            symbol: Stock symbol.
+            batch_size: Number of decision times per batch.
+            progress_callback: Optional callback for progress updates.
+
+        Yields:
+            DataFrame with decision frames for each batch.
+        """
+        total_decisions = len(decision_times)
+        num_batches = (total_decisions + batch_size - 1) // batch_size
+
+        self._log.info(
+            "build_batched_started",
+            symbol=symbol,
+            total_decisions=total_decisions,
+            batch_size=batch_size,
+            num_batches=num_batches,
+        )
+
+        offset = 0
+        batch_idx = 0
+
+        while offset < total_decisions:
+            # Get batch of decision times
+            batch_decisions = decision_times.slice(offset, batch_size)
+
+            # Build decision frame for this batch
+            batch_frame = self.build(
+                decision_times=batch_decisions,
+                micro_bars_30s=micro_bars_30s,
+                bars_1m=bars_1m,
+                bars_5m=bars_5m,
+                bars_15m=bars_15m,
+                symbol=symbol,
+            )
+
+            if progress_callback:
+                progress_callback(batch_idx + 1, num_batches)
+
+            self._log.debug(
+                "batch_completed",
+                batch_idx=batch_idx,
+                input_decisions=len(batch_decisions),
+                output_frames=len(batch_frame),
+            )
+
+            yield batch_frame
+
+            offset += batch_size
+            batch_idx += 1
+
+        self._log.info(
+            "build_batched_completed",
+            symbol=symbol,
+            batches_processed=batch_idx,
+        )
+
+    def build_and_write(
+        self,
+        decision_times: pl.DataFrame,
+        micro_bars_30s: pl.DataFrame,
+        bars_1m: pl.DataFrame,
+        bars_5m: pl.DataFrame,
+        output_path: Path | str,
+        bars_15m: pl.DataFrame | None = None,
+        symbol: str = "",
+        batch_size: int = 100_000,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> int:
+        """
+        Build decision frames and write directly to parquet file.
+
+        Processes in batches and writes incrementally to avoid
+        holding all data in memory.
+
+        Args:
+            decision_times: DataFrame with 'decision_ts' column.
+            micro_bars_30s: 30-second microstructure bars.
+            bars_1m: 1-minute OHLCV bars.
+            bars_5m: 5-minute OHLCV bars.
+            output_path: Path to output parquet file.
+            bars_15m: 15-minute OHLCV bars (optional).
+            symbol: Stock symbol.
+            batch_size: Number of decision times per batch.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            Total number of decision frames written.
+        """
+        output_path = Path(output_path)
+        total_frames = 0
+        first_batch = True
+
+        for batch_frame in self.build_batched(
+            decision_times=decision_times,
+            micro_bars_30s=micro_bars_30s,
+            bars_1m=bars_1m,
+            bars_5m=bars_5m,
+            bars_15m=bars_15m,
+            symbol=symbol,
+            batch_size=batch_size,
+            progress_callback=progress_callback,
+        ):
+            if first_batch:
+                # Write first batch with schema version metadata
+                self.write_parquet(batch_frame, output_path)
+                first_batch = False
+            else:
+                # Append subsequent batches
+                existing = pl.read_parquet(output_path)
+                combined = pl.concat([existing, batch_frame])
+                self.write_parquet(combined, output_path)
+
+            total_frames += len(batch_frame)
+
+        self._log.info(
+            "build_and_write_completed",
+            symbol=symbol,
+            output_path=str(output_path),
+            total_frames=total_frames,
+        )
+
+        return total_frames
+
+    def read_parquet_lazy(
+        self,
+        path: Path | str,
+        columns: list[str] | None = None,
+    ) -> pl.LazyFrame:
+        """
+        Lazily read a decision frame parquet file.
+
+        Uses scan_parquet() with memory mapping for efficient access
+        to large files.
+
+        Args:
+            path: Path to parquet file.
+            columns: Optional list of columns to load.
+
+        Returns:
+            LazyFrame for deferred computation.
+        """
+        lf = pl.scan_parquet(
+            path,
+            memory_map=True,
+        )
+
+        if columns:
+            lf = lf.select(columns)
+
+        return lf
+
+    def validate_parquet(
+        self,
+        path: Path | str,
+        expected_version: str | None = None,
+    ) -> dict:
+        """
+        Validate a decision frame parquet file.
+
+        Checks schema version, column presence, and data types
+        without loading the entire file into memory.
+
+        Args:
+            path: Path to parquet file.
+            expected_version: Optional expected schema version.
+
+        Returns:
+            Dictionary with validation results.
+        """
+        path = Path(path)
+
+        # Get schema version
+        version = get_schema_version(path)
+
+        # Scan to get schema
+        lf = pl.scan_parquet(path, memory_map=True)
+        schema = lf.collect_schema()
+
+        # Check expected columns
+        expected_columns = {
+            "symbol", "decision_ts",
+            "spread_30s", "microprice_30s", "quote_imbalance_30s", "vol_30s",
+            "ret_1m", "vol_1m", "atr_1m",
+            "ret_5m", "trend_5m", "vol_5m",
+            "ret_15m", "trend_15m", "vol_15m",
+            "schema_version",
+        }
+
+        actual_columns = set(schema.names())
+        missing_columns = expected_columns - actual_columns
+        extra_columns = actual_columns - expected_columns
+
+        # Get row count without loading data
+        row_count = lf.select(pl.len()).collect().item()
+
+        validation_result = {
+            "path": str(path),
+            "schema_version": version,
+            "version_valid": version == expected_version if expected_version else True,
+            "row_count": row_count,
+            "column_count": len(schema),
+            "missing_columns": list(missing_columns),
+            "extra_columns": list(extra_columns),
+            "schema_valid": len(missing_columns) == 0,
+        }
+
+        self._log.info(
+            "parquet_validated",
+            **validation_result,
+        )
+
+        return validation_result

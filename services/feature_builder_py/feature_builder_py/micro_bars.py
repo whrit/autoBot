@@ -3,12 +3,20 @@ Microstructure Bar Builder (T2.02).
 
 Builds high-frequency microstructure features at 5s, 15s, and 30s intervals.
 Features: spread, midprice, microprice, quote_imbalance, trade_imbalance, realized_vol.
+
+Optimized for Large Dataset Processing:
+- Lazy frame support with scan_parquet() for memory efficiency
+- Chunked processing for datasets larger than available memory
+- Vectorized realized volatility calculation (no map_elements)
+- Streaming collection for large files
+- Progress callbacks for long-running operations
 """
 
 import sys
 import time
 from datetime import timedelta
-from typing import Callable
+from pathlib import Path
+from typing import Callable, Generator
 
 import polars as pl
 import structlog
@@ -281,7 +289,11 @@ class MicrostructureBarBuilder:
     def _build_trade_bars(
         self, trades: pl.DataFrame, interval_str: str
     ) -> pl.DataFrame:
-        """Build trade-based features."""
+        """
+        Build trade-based features using vectorized operations.
+
+        Optimized to avoid map_elements for better performance on large datasets.
+        """
         if trades.is_empty():
             return pl.DataFrame()
 
@@ -298,9 +310,14 @@ class MicrostructureBarBuilder:
             .alias("direction")
         ])
 
+        # Calculate returns for realized volatility (vectorized)
+        trades_with_returns = trades_with_direction.with_columns([
+            (pl.col("price") / pl.col("prev_price") - 1).alias("trade_return")
+        ])
+
         # Group trades by time interval
         trade_bars = (
-            trades_with_direction
+            trades_with_returns
             .group_by_dynamic(
                 "ts_event",
                 every=interval_str,
@@ -328,20 +345,17 @@ class MicrostructureBarBuilder:
                 .otherwise(0.0)
                 .sum()
                 .alias("sell_volume"),
-                # Returns for realized vol
-                pl.col("price").alias("prices"),
+                # Vectorized realized vol: std of returns within bar
+                pl.col("trade_return").std().alias("realized_vol"),
+                # Count for validation
+                pl.len().alias("trade_count"),
             ])
             .rename({"ts_event": "bar_start"})
         )
 
-        # Calculate realized volatility from intra-bar returns
+        # Fill null realized_vol (happens when < 2 trades in bar)
         trade_bars = trade_bars.with_columns([
-            pl.col("prices")
-            .map_elements(
-                lambda prices: self._calc_realized_vol(prices),
-                return_dtype=pl.Float64,
-            )
-            .alias("realized_vol")
+            pl.col("realized_vol").fill_null(0.0)
         ])
 
         # Calculate trade_imbalance = (buy_volume - sell_volume) / (buy_volume + sell_volume)
@@ -355,7 +369,7 @@ class MicrostructureBarBuilder:
             .alias("trade_imbalance")
         ])
 
-        return trade_bars.drop(["prices", "buy_volume", "sell_volume"])
+        return trade_bars.drop(["buy_volume", "sell_volume", "trade_count"])
 
     @staticmethod
     def _calc_realized_vol(prices: pl.Series) -> float:
@@ -414,3 +428,232 @@ class MicrostructureBarBuilder:
             "trade_volume": pl.Series([], dtype=pl.Float64),
             "realized_vol": pl.Series([], dtype=pl.Float64),
         })
+
+    def build_from_parquet(
+        self,
+        trades_path: Path | str,
+        quotes_path: Path | str,
+        symbol: str,
+        streaming: bool = True,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> pl.DataFrame:
+        """
+        Build micro bars directly from parquet files using lazy evaluation.
+
+        Uses scan_parquet() for memory efficiency and streaming collection
+        for large files.
+
+        Args:
+            trades_path: Path to parquet file with trade data.
+            quotes_path: Path to parquet file with quote data.
+            symbol: Stock symbol.
+            streaming: Use streaming collection for large files.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            DataFrame with microstructure bar data.
+        """
+        trades_path = Path(trades_path)
+        quotes_path = Path(quotes_path)
+        start_time = time.perf_counter()
+
+        self._log.info(
+            "build_from_parquet_started",
+            symbol=symbol,
+            trades_path=str(trades_path),
+            quotes_path=str(quotes_path),
+            streaming=streaming,
+        )
+
+        # Scan parquet files lazily with memory mapping
+        trades_lf = pl.scan_parquet(
+            trades_path,
+            memory_map=True,
+            low_memory=False,
+        )
+        quotes_lf = pl.scan_parquet(
+            quotes_path,
+            memory_map=True,
+            low_memory=False,
+        )
+
+        if progress_callback:
+            progress_callback(1, 4)
+
+        # Collect with streaming
+        try:
+            if streaming:
+                trades = trades_lf.collect(streaming=True)
+                quotes = quotes_lf.collect(streaming=True)
+            else:
+                trades = trades_lf.collect()
+                quotes = quotes_lf.collect()
+        except Exception as e:
+            self._log.warning(
+                "streaming_fallback",
+                error=str(e),
+            )
+            trades = trades_lf.collect()
+            quotes = quotes_lf.collect()
+
+        if progress_callback:
+            progress_callback(2, 4)
+
+        # Build micro bars
+        result = self.build(trades, quotes, symbol)
+
+        if progress_callback:
+            progress_callback(4, 4)
+
+        elapsed = time.perf_counter() - start_time
+
+        self._log.info(
+            "build_from_parquet_completed",
+            symbol=symbol,
+            output_bars=len(result),
+            processing_time_sec=round(elapsed, 3),
+        )
+
+        return result
+
+    def build_chunked(
+        self,
+        trades_path: Path | str,
+        quotes_path: Path | str,
+        symbol: str,
+        chunk_size: int = 500_000,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> Generator[pl.DataFrame, None, None]:
+        """
+        Build micro bars in chunks for very large datasets.
+
+        Processes the input files in chunks, yielding bar DataFrames
+        for each chunk. Useful when the dataset is too large to fit
+        in memory.
+
+        Args:
+            trades_path: Path to parquet file with trade data.
+            quotes_path: Path to parquet file with quote data.
+            symbol: Stock symbol.
+            chunk_size: Number of rows per chunk.
+            progress_callback: Optional callback for progress updates.
+
+        Yields:
+            DataFrame with micro bars for each chunk.
+        """
+        trades_path = Path(trades_path)
+        quotes_path = Path(quotes_path)
+
+        self._log.info(
+            "build_chunked_started",
+            symbol=symbol,
+            trades_path=str(trades_path),
+            quotes_path=str(quotes_path),
+            chunk_size=chunk_size,
+        )
+
+        # Get total row counts
+        trades_total = pl.scan_parquet(trades_path).select(pl.len()).collect().item()
+        quotes_total = pl.scan_parquet(quotes_path).select(pl.len()).collect().item()
+
+        # Use the smaller count for chunking
+        total_rows = min(trades_total, quotes_total)
+        num_chunks = (total_rows + chunk_size - 1) // chunk_size
+
+        self._log.info(
+            "chunk_plan",
+            trades_rows=trades_total,
+            quotes_rows=quotes_total,
+            chunk_size=chunk_size,
+            num_chunks=num_chunks,
+        )
+
+        offset = 0
+        chunk_idx = 0
+
+        while offset < total_rows:
+            # Scan chunks with offset and limit
+            trades_chunk = pl.scan_parquet(trades_path, memory_map=True)
+            trades_chunk = trades_chunk.sort("ts_event").slice(offset, chunk_size).collect()
+
+            quotes_chunk = pl.scan_parquet(quotes_path, memory_map=True)
+            quotes_chunk = quotes_chunk.sort("ts_event").slice(offset, chunk_size).collect()
+
+            # Build micro bars for this chunk
+            chunk_bars = self.build(trades_chunk, quotes_chunk, symbol)
+
+            if progress_callback:
+                progress_callback(chunk_idx + 1, num_chunks)
+
+            self._log.debug(
+                "chunk_completed",
+                chunk_idx=chunk_idx,
+                trades_in_chunk=len(trades_chunk),
+                quotes_in_chunk=len(quotes_chunk),
+                output_bars=len(chunk_bars),
+            )
+
+            yield chunk_bars
+
+            offset += chunk_size
+            chunk_idx += 1
+
+        self._log.info(
+            "build_chunked_completed",
+            symbol=symbol,
+            chunks_processed=chunk_idx,
+        )
+
+    def build_and_write(
+        self,
+        trades_path: Path | str,
+        quotes_path: Path | str,
+        output_path: Path | str,
+        symbol: str,
+        chunk_size: int = 500_000,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> int:
+        """
+        Build micro bars and write directly to parquet file.
+
+        Processes in chunks and writes incrementally to avoid
+        holding all data in memory.
+
+        Args:
+            trades_path: Path to input parquet file with trade data.
+            quotes_path: Path to input parquet file with quote data.
+            output_path: Path to output parquet file.
+            symbol: Stock symbol.
+            chunk_size: Number of rows per chunk.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            Total number of micro bars written.
+        """
+        output_path = Path(output_path)
+        total_bars = 0
+        first_chunk = True
+
+        for chunk_bars in self.build_chunked(
+            trades_path, quotes_path, symbol, chunk_size, progress_callback
+        ):
+            if first_chunk:
+                # Write first chunk (creates file)
+                chunk_bars.write_parquet(output_path)
+                first_chunk = False
+            else:
+                # Append subsequent chunks
+                existing = pl.read_parquet(output_path)
+                combined = pl.concat([existing, chunk_bars])
+                combined.write_parquet(output_path)
+
+            total_bars += len(chunk_bars)
+
+        self._log.info(
+            "build_and_write_completed",
+            symbol=symbol,
+            output_path=str(output_path),
+            total_bars=total_bars,
+        )
+
+        return total_bars

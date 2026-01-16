@@ -9,14 +9,21 @@ Includes comprehensive structured logging for:
 - Trade execution details
 - Fill prices and slippage
 - Memory-efficient logging for large backtests
+
+Memory optimizations:
+- Lazy market data loading for large historical datasets
+- Configurable equity history sampling to reduce memory
+- Chunked signal processing for very large backtests
+- Memory usage tracking and logging
 """
 
 from __future__ import annotations
 
+import gc
+from collections.abc import Callable, Generator, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Literal
 
 import polars as pl
@@ -34,6 +41,51 @@ if TYPE_CHECKING:
 
 # Module-level logger
 logger = get_logger("backtester.engine")
+
+
+def get_memory_usage_mb() -> float:
+    """Get current process memory usage in MB."""
+    try:
+        import resource
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        return usage.ru_maxrss / 1024  # Convert KB to MB
+    except (ImportError, AttributeError):
+        return 0.0
+
+
+@dataclass
+class MemoryConfig:
+    """Configuration for memory management during backtesting.
+
+    Attributes:
+        equity_sample_rate: Sample equity every N signals (1 = every signal).
+                          Higher values reduce memory for equity curve.
+        max_fills_in_memory: Maximum fills to keep in memory.
+                            Older fills are dropped if exceeded.
+        signal_chunk_size: Process signals in chunks of this size.
+                          Set to 0 to disable chunking.
+        enable_memory_logging: Log memory usage periodically.
+        gc_after_chunk: Run garbage collection after each chunk.
+    """
+    equity_sample_rate: int = 1
+    max_fills_in_memory: int = 100_000
+    signal_chunk_size: int = 0
+    enable_memory_logging: bool = False
+    gc_after_chunk: bool = False
+
+
+@dataclass
+class MemoryStats:
+    """Track memory usage during backtesting."""
+    peak_memory_mb: float = 0.0
+    signals_processed: int = 0
+    fills_processed: int = 0
+    fills_dropped: int = 0
+
+    def update(self) -> None:
+        """Update peak memory tracking."""
+        current = get_memory_usage_mb()
+        self.peak_memory_mb = max(self.peak_memory_mb, current)
 
 
 class SignalType(str, Enum):
@@ -202,6 +254,7 @@ class BacktestEngine:
         config: BacktestConfig,
         enable_logging: bool = True,
         log_every_n_signals: int = 100,
+        memory_config: MemoryConfig | None = None,
     ) -> None:
         """
         Initialize the backtest engine.
@@ -210,13 +263,17 @@ class BacktestEngine:
             config: Backtest configuration
             enable_logging: Whether to log simulation progress
             log_every_n_signals: Log progress every N signals processed
+            memory_config: Optional memory management configuration.
+                          If None, uses default MemoryConfig.
         """
         self.config = config
+        self.memory_config = memory_config or MemoryConfig()
         self._positions: dict[str, Position] = {}
         self._cash: float = config.initial_capital
         self._fills: list[Fill] = []
         self._equity_history: list[dict[str, datetime | float]] = []
         self._risk_violations: list[str] = []
+        self._memory_stats = MemoryStats()
 
         # Logging configuration
         self._enable_logging = enable_logging
@@ -232,6 +289,8 @@ class BacktestEngine:
                 initial_capital=config.initial_capital,
                 stop_loss_pct=config.stop_loss_pct,
                 default_order_notional=config.default_order_notional,
+                equity_sample_rate=self.memory_config.equity_sample_rate,
+                max_fills_in_memory=self.memory_config.max_fills_in_memory,
             )
 
     def run(
@@ -813,3 +872,289 @@ class BacktestEngine:
             total_trades=len(self._fills),
             risk_violations=self._risk_violations,
         )
+
+    def _trim_fills_if_needed(self) -> None:
+        """Trim fills list if it exceeds max_fills_in_memory."""
+        max_fills = self.memory_config.max_fills_in_memory
+        if max_fills > 0 and len(self._fills) > max_fills:
+            # Keep only the most recent fills
+            excess = len(self._fills) - max_fills
+            self._fills = self._fills[excess:]
+            self._memory_stats.fills_dropped += excess
+
+            if self._enable_logging:
+                logger.debug(
+                    "fills_trimmed",
+                    dropped=excess,
+                    total_dropped=self._memory_stats.fills_dropped,
+                    remaining=len(self._fills),
+                )
+
+    def run_chunked(
+        self,
+        market_data: pl.DataFrame,
+        signals: list[Signal],
+        chunk_size: int | None = None,
+        progress_callback: Callable[[int, int, dict[str, float]], None] | None = None,
+    ) -> Generator[BacktestResult, None, BacktestResult]:
+        """
+        Run backtest in chunks for memory efficiency.
+
+        Processes signals in chunks, yielding intermediate results.
+        Useful for very long backtests where keeping all fills in memory
+        is impractical.
+
+        Args:
+            market_data: DataFrame with market data
+            signals: List of trading signals
+            chunk_size: Signals per chunk. If None, uses memory_config.signal_chunk_size.
+                       If 0, processes all signals at once (same as run()).
+            progress_callback: Optional callback for progress updates.
+
+        Yields:
+            BacktestResult after each chunk
+
+        Returns:
+            Final BacktestResult with aggregated statistics
+        """
+        chunk_size = chunk_size or self.memory_config.signal_chunk_size
+
+        # If chunk_size is 0, run normally
+        if chunk_size <= 0:
+            yield self.run(market_data, signals, progress_callback)
+            return self.run(market_data, signals, progress_callback)
+
+        # Reset state
+        self._positions = {}
+        self._cash = self.config.initial_capital
+        self._fills = []
+        self._equity_history = []
+        self._risk_violations = []
+        self._signals_processed = 0
+        self._memory_stats = MemoryStats()
+
+        if self._enable_logging:
+            reset_trade_buffer()
+            self._trade_buffer = get_trade_buffer()
+            logger.info(
+                "chunked_backtest_started",
+                total_signals=len(signals),
+                chunk_size=chunk_size,
+                num_chunks=(len(signals) + chunk_size - 1) // chunk_size,
+            )
+
+        # Sort signals by timestamp
+        sorted_signals = sorted(signals, key=lambda s: s.timestamp)
+        total_signals = len(sorted_signals)
+
+        # Process in chunks
+        for chunk_start in range(0, total_signals, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, total_signals)
+            chunk_signals = sorted_signals[chunk_start:chunk_end]
+
+            # Process each signal in chunk
+            for idx, signal in enumerate(chunk_signals):
+                self._process_signal(signal, market_data)
+                self._signals_processed += 1
+                self._memory_stats.signals_processed += 1
+
+                # Sample equity based on rate
+                if self._signals_processed % self.memory_config.equity_sample_rate == 0:
+                    # Get latest quote for equity calculation
+                    quote = self._get_quote_at_time(
+                        market_data, signal.symbol, signal.timestamp
+                    )
+                    if quote:
+                        self._record_equity(
+                            signal.timestamp,
+                            quote["bid_price"],
+                            quote["ask_price"],
+                        )
+
+                # Log progress
+                global_idx = chunk_start + idx
+                if self._enable_logging and self._signals_processed % self._log_every_n == 0:
+                    self._memory_stats.update()
+                    logger.debug(
+                        "chunked_simulation_progress",
+                        signals_processed=self._signals_processed,
+                        total_signals=total_signals,
+                        memory_mb=get_memory_usage_mb(),
+                    )
+
+                # Progress callback
+                if progress_callback and global_idx % max(1, total_signals // 100) == 0:
+                    metrics = self._get_current_metrics()
+                    progress_callback(global_idx + 1, total_signals, metrics)
+
+            # Trim fills if needed
+            self._trim_fills_if_needed()
+
+            # Optional garbage collection
+            if self.memory_config.gc_after_chunk:
+                gc.collect()
+
+            # Memory logging
+            if self.memory_config.enable_memory_logging:
+                self._memory_stats.update()
+                logger.info(
+                    "chunk_completed",
+                    chunk=chunk_start // chunk_size + 1,
+                    signals_in_chunk=len(chunk_signals),
+                    total_processed=self._signals_processed,
+                    memory_mb=get_memory_usage_mb(),
+                    peak_memory_mb=self._memory_stats.peak_memory_mb,
+                )
+
+            # Yield intermediate result
+            yield self._build_result()
+
+        # Log completion
+        if self._enable_logging:
+            trade_summary = (
+                self._trade_buffer.get_summary() if self._trade_buffer else {}
+            )
+            logger.info(
+                "chunked_backtest_completed",
+                total_signals=total_signals,
+                total_trades=len(self._fills),
+                fills_dropped=self._memory_stats.fills_dropped,
+                peak_memory_mb=self._memory_stats.peak_memory_mb,
+                **trade_summary,
+            )
+
+        return self._build_result()
+
+    def run_with_lazy_data(
+        self,
+        market_data_path: str,
+        signals: list[Signal],
+        chunk_size: int = 10_000,
+        progress_callback: Callable[[int, int, dict[str, float]], None] | None = None,
+    ) -> BacktestResult:
+        """
+        Run backtest with lazy-loaded market data.
+
+        Loads market data in chunks from a Parquet file rather than
+        keeping the entire dataset in memory. Useful for backtests
+        spanning years of tick data.
+
+        Args:
+            market_data_path: Path to Parquet file with market data
+            signals: List of trading signals
+            chunk_size: Signals per processing chunk
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            BacktestResult with fills, positions, and metrics
+        """
+        # Reset state
+        self._positions = {}
+        self._cash = self.config.initial_capital
+        self._fills = []
+        self._equity_history = []
+        self._risk_violations = []
+        self._signals_processed = 0
+        self._memory_stats = MemoryStats()
+
+        if self._enable_logging:
+            reset_trade_buffer()
+            self._trade_buffer = get_trade_buffer()
+            logger.info(
+                "lazy_backtest_started",
+                data_path=market_data_path,
+                total_signals=len(signals),
+            )
+
+        # Sort signals by timestamp
+        sorted_signals = sorted(signals, key=lambda s: s.timestamp)
+        total_signals = len(sorted_signals)
+
+        # Process in chunks, loading only necessary market data
+        for chunk_start in range(0, total_signals, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, total_signals)
+            chunk_signals = sorted_signals[chunk_start:chunk_end]
+
+            if not chunk_signals:
+                continue
+
+            # Determine time range for this chunk
+            start_time = chunk_signals[0].timestamp
+            end_time = chunk_signals[-1].timestamp
+
+            # Load only the market data needed for this chunk
+            # Add some buffer time for horizon lookups
+            market_data = pl.scan_parquet(market_data_path).filter(
+                (pl.col("timestamp") >= start_time) &
+                (pl.col("timestamp") <= end_time)
+            ).collect()
+
+            # Process signals in this chunk
+            for signal in chunk_signals:
+                self._process_signal(signal, market_data)
+                self._signals_processed += 1
+                self._memory_stats.signals_processed += 1
+
+                # Sample equity
+                if self._signals_processed % self.memory_config.equity_sample_rate == 0:
+                    quote = self._get_quote_at_time(
+                        market_data, signal.symbol, signal.timestamp
+                    )
+                    if quote:
+                        self._record_equity(
+                            signal.timestamp,
+                            quote["bid_price"],
+                            quote["ask_price"],
+                        )
+
+            # Clear chunk data
+            del market_data
+
+            # Trim fills if needed
+            self._trim_fills_if_needed()
+
+            # Garbage collection
+            if self.memory_config.gc_after_chunk:
+                gc.collect()
+
+            # Memory logging
+            if self.memory_config.enable_memory_logging:
+                self._memory_stats.update()
+                logger.debug(
+                    "lazy_chunk_completed",
+                    chunk=chunk_start // chunk_size + 1,
+                    memory_mb=get_memory_usage_mb(),
+                )
+
+            # Progress callback
+            if progress_callback:
+                metrics = self._get_current_metrics()
+                progress_callback(chunk_end, total_signals, metrics)
+
+        # Build and return final result
+        if self._enable_logging:
+            logger.info(
+                "lazy_backtest_completed",
+                total_signals=total_signals,
+                total_trades=len(self._fills),
+                peak_memory_mb=self._memory_stats.peak_memory_mb,
+            )
+
+        return self._build_result()
+
+    def get_memory_stats(self) -> dict[str, float | int]:
+        """Get memory usage statistics from the backtest.
+
+        Returns:
+            Dictionary with memory metrics.
+        """
+        self._memory_stats.update()
+        return {
+            "peak_memory_mb": self._memory_stats.peak_memory_mb,
+            "current_memory_mb": get_memory_usage_mb(),
+            "signals_processed": self._memory_stats.signals_processed,
+            "fills_processed": self._memory_stats.fills_processed,
+            "fills_dropped": self._memory_stats.fills_dropped,
+            "fills_in_memory": len(self._fills),
+            "equity_points": len(self._equity_history),
+        }

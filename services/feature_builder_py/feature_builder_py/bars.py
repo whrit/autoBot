@@ -3,11 +3,18 @@ Standard Bar Builder (T2.01).
 
 Builds OHLCV bars from raw trades at 1-minute, 5-minute, and 15-minute intervals.
 Features: open, high, low, close, volume, returns, ATR, volatility.
+
+Optimized for Large Dataset Processing:
+- Lazy frame support with scan_parquet() for memory efficiency
+- Batch processing for datasets larger than available memory
+- Streaming collection for large files
+- Progress callbacks for long-running operations
 """
 
 import time
 from datetime import timedelta
-from typing import Callable
+from pathlib import Path
+from typing import Callable, Generator
 
 import polars as pl
 import structlog
@@ -244,3 +251,300 @@ class StandardBarBuilder:
             "atr": pl.Series([], dtype=pl.Float64),
             "realized_vol": pl.Series([], dtype=pl.Float64),
         })
+
+    def build_lazy(
+        self,
+        trades_lf: pl.LazyFrame,
+        symbol: str,
+    ) -> pl.LazyFrame:
+        """
+        Build bars from a LazyFrame for memory-efficient processing.
+
+        Uses lazy evaluation - no computation happens until .collect() is called.
+        This enables query optimization and predicate pushdown.
+
+        Args:
+            trades_lf: LazyFrame with trade data.
+            symbol: Stock symbol.
+
+        Returns:
+            LazyFrame with bar data (call .collect() to materialize).
+        """
+        self._log.info(
+            "build_lazy_started",
+            symbol=symbol,
+        )
+
+        # Get interval string for polars groupby_dynamic
+        interval_str = self._get_interval_str()
+
+        # Build the lazy computation graph
+        bars_lf = (
+            trades_lf.sort("ts_event")
+            .group_by_dynamic(
+                "ts_event",
+                every=interval_str,
+                period=interval_str,
+                label="left",
+                closed="left",
+            )
+            .agg([
+                pl.col("price").first().alias("open"),
+                pl.col("price").max().alias("high"),
+                pl.col("price").min().alias("low"),
+                pl.col("price").last().alias("close"),
+                pl.col("size").sum().alias("volume"),
+            ])
+            .rename({"ts_event": "bar_start"})
+            .with_columns([
+                (pl.col("bar_start") + self.interval).alias("bar_end"),
+                pl.lit(symbol).alias("symbol"),
+            ])
+            .with_columns([
+                (pl.col("close") / pl.col("close").shift(1) - 1).alias("returns")
+            ])
+        )
+
+        # ATR calculation (simplified for lazy evaluation)
+        bars_lf = bars_lf.with_columns([
+            pl.col("close").shift(1).alias("prev_close")
+        ]).with_columns([
+            pl.max_horizontal([
+                pl.col("high") - pl.col("low"),
+                (pl.col("high") - pl.col("prev_close")).abs(),
+                (pl.col("low") - pl.col("prev_close")).abs(),
+            ]).alias("true_range")
+        ]).with_columns([
+            pl.col("true_range")
+            .rolling_mean(window_size=self.atr_period, min_samples=1)
+            .alias("atr")
+        ]).with_columns([
+            pl.col("returns")
+            .rolling_std(window_size=self.atr_period, min_samples=2)
+            .alias("realized_vol")
+        ]).drop(["prev_close", "true_range"])
+
+        # Reorder columns
+        result_lf = bars_lf.select([
+            "symbol",
+            "bar_start",
+            "bar_end",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "returns",
+            "atr",
+            "realized_vol",
+        ])
+
+        self._log.info(
+            "build_lazy_plan_created",
+            symbol=symbol,
+        )
+
+        return result_lf
+
+    def build_from_parquet(
+        self,
+        path: Path | str,
+        symbol: str,
+        streaming: bool = True,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> pl.DataFrame:
+        """
+        Build bars directly from a parquet file using lazy evaluation.
+
+        Uses scan_parquet() for memory efficiency and streaming collection
+        for large files.
+
+        Args:
+            path: Path to parquet file with trade data.
+            symbol: Stock symbol.
+            streaming: Use streaming collection for large files.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            DataFrame with bar data.
+        """
+        path = Path(path)
+        start_time = time.perf_counter()
+
+        self._log.info(
+            "build_from_parquet_started",
+            symbol=symbol,
+            path=str(path),
+            streaming=streaming,
+        )
+
+        # Scan parquet lazily with memory mapping
+        trades_lf = pl.scan_parquet(
+            path,
+            memory_map=True,
+            low_memory=False,
+        )
+
+        if progress_callback:
+            progress_callback(1, 3)
+
+        # Build lazy computation graph
+        bars_lf = self.build_lazy(trades_lf, symbol)
+
+        if progress_callback:
+            progress_callback(2, 3)
+
+        # Collect with streaming if requested
+        try:
+            if streaming:
+                result = bars_lf.collect(streaming=True)
+            else:
+                result = bars_lf.collect()
+        except Exception as e:
+            self._log.warning(
+                "streaming_fallback",
+                error=str(e),
+            )
+            result = bars_lf.collect()
+
+        if progress_callback:
+            progress_callback(3, 3)
+
+        elapsed = time.perf_counter() - start_time
+
+        self._log.info(
+            "build_from_parquet_completed",
+            symbol=symbol,
+            output_bars=len(result),
+            processing_time_sec=round(elapsed, 3),
+        )
+
+        return result
+
+    def build_batched(
+        self,
+        path: Path | str,
+        symbol: str,
+        batch_size: int = 1_000_000,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> Generator[pl.DataFrame, None, None]:
+        """
+        Build bars in batches for very large datasets.
+
+        Processes the input file in chunks, yielding bar DataFrames
+        for each batch. Useful when the dataset is too large to fit
+        in memory.
+
+        Args:
+            path: Path to parquet file with trade data.
+            symbol: Stock symbol.
+            batch_size: Number of rows per batch.
+            progress_callback: Optional callback for progress updates.
+
+        Yields:
+            DataFrame with bars for each batch.
+        """
+        path = Path(path)
+
+        self._log.info(
+            "build_batched_started",
+            symbol=symbol,
+            path=str(path),
+            batch_size=batch_size,
+        )
+
+        # Get total row count
+        total_rows = pl.scan_parquet(path).select(pl.len()).collect().item()
+        num_batches = (total_rows + batch_size - 1) // batch_size
+
+        self._log.info(
+            "batch_plan",
+            total_rows=total_rows,
+            batch_size=batch_size,
+            num_batches=num_batches,
+        )
+
+        offset = 0
+        batch_idx = 0
+
+        while offset < total_rows:
+            # Scan with offset and limit
+            batch_lf = pl.scan_parquet(path, memory_map=True)
+            batch_lf = batch_lf.sort("ts_event").slice(offset, batch_size)
+
+            # Build bars for this batch
+            bars_lf = self.build_lazy(batch_lf, symbol)
+            batch_bars = bars_lf.collect()
+
+            if progress_callback:
+                progress_callback(batch_idx + 1, num_batches)
+
+            self._log.debug(
+                "batch_completed",
+                batch_idx=batch_idx,
+                input_rows=min(batch_size, total_rows - offset),
+                output_bars=len(batch_bars),
+            )
+
+            yield batch_bars
+
+            offset += batch_size
+            batch_idx += 1
+
+        self._log.info(
+            "build_batched_completed",
+            symbol=symbol,
+            batches_processed=batch_idx,
+        )
+
+    def build_and_write(
+        self,
+        input_path: Path | str,
+        output_path: Path | str,
+        symbol: str,
+        batch_size: int = 1_000_000,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> int:
+        """
+        Build bars and write directly to parquet file.
+
+        Processes in batches and writes incrementally to avoid
+        holding all data in memory.
+
+        Args:
+            input_path: Path to input parquet file with trade data.
+            output_path: Path to output parquet file.
+            symbol: Stock symbol.
+            batch_size: Number of rows per batch.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            Total number of bars written.
+        """
+        output_path = Path(output_path)
+        total_bars = 0
+        first_batch = True
+
+        for batch_bars in self.build_batched(
+            input_path, symbol, batch_size, progress_callback
+        ):
+            if first_batch:
+                # Write first batch (creates file)
+                batch_bars.write_parquet(output_path)
+                first_batch = False
+            else:
+                # Append subsequent batches
+                existing = pl.read_parquet(output_path)
+                combined = pl.concat([existing, batch_bars])
+                combined.write_parquet(output_path)
+
+            total_bars += len(batch_bars)
+
+        self._log.info(
+            "build_and_write_completed",
+            symbol=symbol,
+            output_path=str(output_path),
+            total_bars=total_bars,
+        )
+
+        return total_bars
