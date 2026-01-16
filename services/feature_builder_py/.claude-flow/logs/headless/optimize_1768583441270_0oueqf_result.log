@@ -1,0 +1,13 @@
+[2026-01-16T17:20:41.375Z] RESULT
+============================================================
+{
+  "success": false,
+  "output": "",
+  "durationMs": 600105,
+  "model": "sonnet",
+  "sandboxMode": "permissive",
+  "workerType": "optimize",
+  "timestamp": "2026-01-16T17:20:41.375Z",
+  "executionId": "optimize_1768583441270_0oueqf",
+  "error": "Execution timed out after 600000ms"
+}

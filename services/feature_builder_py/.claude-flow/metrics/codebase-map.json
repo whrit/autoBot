@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-01-16T07:08:38.710Z",
+  "timestamp": "2026-01-16T19:06:38.873Z",
   "projectRoot": "/home/bw/Projects/autoBot/services/feature_builder_py",
   "structure": {
     "hasPackageJson": false,
@@ -7,5 +7,5 @@
     "hasClaudeConfig": false,
     "hasClaudeFlow": true
   },
-  "scannedAt": 1768547318710
+  "scannedAt": 1768590398873
 }

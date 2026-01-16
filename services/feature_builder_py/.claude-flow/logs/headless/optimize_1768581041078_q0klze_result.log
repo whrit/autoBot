@@ -1,0 +1,13 @@
+[2026-01-16T16:40:41.136Z] RESULT
+============================================================
+{
+  "success": false,
+  "output": "",
+  "durationMs": 600058,
+  "model": "sonnet",
+  "sandboxMode": "permissive",
+  "workerType": "optimize",
+  "timestamp": "2026-01-16T16:40:41.136Z",
+  "executionId": "optimize_1768581041078_q0klze",
+  "error": "Process exited with code 143"
+}

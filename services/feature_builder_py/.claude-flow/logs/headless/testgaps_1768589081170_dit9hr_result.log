@@ -1,0 +1,13 @@
+[2026-01-16T18:54:41.268Z] RESULT
+============================================================
+{
+  "success": false,
+  "output": "",
+  "durationMs": 600098,
+  "model": "sonnet",
+  "sandboxMode": "permissive",
+  "workerType": "testgaps",
+  "timestamp": "2026-01-16T18:54:41.268Z",
+  "executionId": "testgaps_1768589081170_dit9hr",
+  "error": "Process exited with code 143"
+}
