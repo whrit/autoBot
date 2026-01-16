@@ -62,6 +62,13 @@ from backtester_py.visualization import (
     generate_trade_summary_table,
 )
 from backtester_py.walk_forward import FoldResult, WalkForwardOptimizer, WalkForwardResult
+from backtester_py.parallel_optimizer import (
+    GridSearchResult,
+    GridSearchSummary,
+    ParallelGridSearch,
+    ResultCache,
+    run_grid_search_cli,
+)
 
 __all__ = [
     # Engine
@@ -96,6 +103,12 @@ __all__ = [
     "generate_equity_chart",
     "generate_html_report",
     "generate_trade_summary_table",
+    # Parallel Grid Search (T3.09)
+    "ParallelGridSearch",
+    "GridSearchResult",
+    "GridSearchSummary",
+    "ResultCache",
+    "run_grid_search_cli",
 ]
 
 __version__ = "0.1.0"

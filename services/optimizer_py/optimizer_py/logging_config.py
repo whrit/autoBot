@@ -7,6 +7,7 @@ Uses structlog for structured logging and rich for console formatting.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -179,7 +180,7 @@ def configure_logging(
         json_output: If True, output JSON format; otherwise human-readable
     """
     processors: list[Callable[..., Any]] = [
-        structlog.stdlib.add_log_level,
+        structlog.processors.add_log_level,
         add_timestamp,
         add_service_context,
         structlog.processors.StackInfoRenderer(),
@@ -191,11 +192,33 @@ def configure_logging(
     else:
         processors.append(structlog.dev.ConsoleRenderer(colors=True))
 
+    # Filter by log level in processors instead of wrapper
+    min_level = getattr(logging, log_level.upper(), logging.INFO)
+
+    def level_filter(
+        logger: structlog.types.WrappedLogger,
+        method_name: str,
+        event_dict: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Filter events below minimum log level."""
+        level_map = {
+            "debug": logging.DEBUG,
+            "info": logging.INFO,
+            "warning": logging.WARNING,
+            "error": logging.ERROR,
+            "critical": logging.CRITICAL,
+        }
+        event_level = level_map.get(method_name, logging.INFO)
+        if event_level < min_level:
+            raise structlog.DropEvent
+        return event_dict
+
+    # Insert level filter at the beginning
+    processors.insert(0, level_filter)
+
     structlog.configure(
         processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(structlog, log_level.upper(), structlog.INFO)
-        ),
+        wrapper_class=structlog.BoundLogger,
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(),
         cache_logger_on_first_use=True,

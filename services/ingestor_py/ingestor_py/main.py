@@ -18,7 +18,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from ingestor_py.backfill import BackfillOrchestrator, BackfillStats
+from ingestor_py.backfill import (
+    AsyncBackfillOrchestrator,
+    BackfillOrchestrator,
+    BackfillStats,
+)
 from ingestor_py.logging_config import (
     configure_logging,
     format_bytes,
@@ -65,6 +69,7 @@ def print_config_table(
     days: int | None = None,
     data_types: list[str] | None = None,
     feed: str = "iex",
+    parallel: bool = False,
 ) -> None:
     """Print configuration summary table.
 
@@ -75,6 +80,7 @@ def print_config_table(
         days: Number of days (for backfill).
         data_types: Data types to ingest.
         feed: Data feed name.
+        parallel: Whether parallel mode is enabled.
     """
     table = Table(show_header=True, header_style="bold cyan", box=None)
     table.add_column("Config", style="dim")
@@ -88,6 +94,7 @@ def print_config_table(
         table.add_row("Days", str(days))
         if data_types:
             table.add_row("Data Types", ", ".join(data_types))
+        table.add_row("Mode", "[bold green]Parallel[/]" if parallel else "Sequential")
 
     console.print(table)
     console.print()
@@ -155,8 +162,78 @@ def run_backfill(
     days: int = 30,
     data_types: list[str] | None = None,
     feed: str = "iex",
+    parallel: bool = False,
 ) -> None:
     """Run historical data backfill with progress display.
+
+    Args:
+        api_key: Alpaca API key.
+        api_secret: Alpaca API secret.
+        lake_path: Path to data lake.
+        symbols: List of symbols to backfill.
+        days: Number of days to backfill.
+        data_types: List of data types to backfill.
+        feed: Data feed ('iex' or 'sip').
+        parallel: Use parallel mode for concurrent fetching.
+    """
+    if data_types is None:
+        data_types = ["trades", "quotes", "bars"]
+
+    logger.info(
+        "backfill_starting",
+        symbols=symbols,
+        days=days,
+        data_types=data_types,
+        feed=feed,
+        parallel=parallel,
+    )
+
+    if parallel:
+        # Use async parallel backfill
+        asyncio.run(
+            run_backfill_parallel(
+                api_key=api_key,
+                api_secret=api_secret,
+                lake_path=lake_path,
+                symbols=symbols,
+                days=days,
+                data_types=data_types,
+                feed=feed,
+            )
+        )
+    else:
+        # Use sequential backfill
+        orchestrator = BackfillOrchestrator(
+            api_key=api_key,
+            api_secret=api_secret,
+            lake_path=lake_path,
+            feed=feed,
+        )
+
+        try:
+            stats = orchestrator.backfill_date_range_with_progress(
+                symbols=symbols,
+                days=days,
+                data_types=data_types,
+            )
+            print_backfill_summary(stats)
+
+        except Exception as e:
+            logger.error("backfill_failed", error=str(e), exc_info=True)
+            console.print(f"\n[bold red]Backfill failed:[/bold red] {e}")
+            sys.exit(1)
+
+
+async def run_backfill_parallel(
+    api_key: str,
+    api_secret: str,
+    lake_path: Path,
+    symbols: list[str],
+    days: int = 30,
+    data_types: list[str] | None = None,
+    feed: str = "iex",
+) -> None:
+    """Run historical data backfill in parallel mode.
 
     Args:
         api_key: Alpaca API key.
@@ -170,15 +247,7 @@ def run_backfill(
     if data_types is None:
         data_types = ["trades", "quotes", "bars"]
 
-    logger.info(
-        "backfill_starting",
-        symbols=symbols,
-        days=days,
-        data_types=data_types,
-        feed=feed,
-    )
-
-    orchestrator = BackfillOrchestrator(
+    orchestrator = AsyncBackfillOrchestrator(
         api_key=api_key,
         api_secret=api_secret,
         lake_path=lake_path,
@@ -186,7 +255,7 @@ def run_backfill(
     )
 
     try:
-        stats = orchestrator.backfill_date_range_with_progress(
+        stats = await orchestrator.backfill_date_range_parallel(
             symbols=symbols,
             days=days,
             data_types=data_types,
@@ -194,8 +263,8 @@ def run_backfill(
         print_backfill_summary(stats)
 
     except Exception as e:
-        logger.error("backfill_failed", error=str(e), exc_info=True)
-        console.print(f"\n[bold red]Backfill failed:[/bold red] {e}")
+        logger.error("parallel_backfill_failed", error=str(e), exc_info=True)
+        console.print(f"\n[bold red]Parallel backfill failed:[/bold red] {e}")
         sys.exit(1)
 
 
@@ -259,6 +328,9 @@ def main() -> None:
     feed = os.environ.get("ALPACA_FEED", "iex")
     data_types_env = os.environ.get("DATA_TYPES", "trades,quotes,bars")
     data_types = [dt.strip() for dt in data_types_env.split(",")]
+    # PARALLEL flag: set to "true", "1", or "yes" to enable parallel mode
+    parallel_env = os.environ.get("PARALLEL", "false").lower()
+    parallel = parallel_env in ("true", "1", "yes")
 
     # Ensure lake directory exists
     lake_path.mkdir(parents=True, exist_ok=True)
@@ -272,6 +344,7 @@ def main() -> None:
         days=days if mode == "backfill" else None,
         data_types=data_types if mode == "backfill" else None,
         feed=feed,
+        parallel=parallel if mode == "backfill" else False,
     )
 
     logger.info(
@@ -280,6 +353,7 @@ def main() -> None:
         lake_path=str(lake_path),
         symbols=symbols,
         feed=feed,
+        parallel=parallel if mode == "backfill" else False,
     )
 
     if mode == "backfill":
@@ -291,6 +365,7 @@ def main() -> None:
             days=days,
             data_types=data_types,
             feed=feed,
+            parallel=parallel,
         )
     elif mode == "stream":
         asyncio.run(

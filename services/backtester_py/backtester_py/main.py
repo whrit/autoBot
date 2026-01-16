@@ -77,6 +77,8 @@ class BacktestRunConfig:
     generate_html: bool = True
     show_trades: bool = True
     log_level: str = "INFO"
+    parallel: bool = False
+    max_workers: int | None = None  # None = auto (CPU count - 1)
 
 
 class BacktesterUI:
@@ -404,6 +406,105 @@ def parse_args() -> argparse.Namespace:
         help="Run with demo data",
     )
 
+    # Parallel walk-forward arguments
+    parser.add_argument(
+        "--parallel",
+        "-p",
+        action="store_true",
+        help="Enable parallel processing for walk-forward optimization",
+    )
+    parser.add_argument(
+        "--workers",
+        "-w",
+        type=int,
+        default=None,
+        help="Number of parallel workers (default: CPU count - 1)",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=0.0,
+        help="Timeout per fold in seconds (default: 0 = no timeout)",
+    )
+    parser.add_argument(
+        "--walk-forward",
+        action="store_true",
+        help="Run walk-forward optimization instead of single backtest",
+    )
+    parser.add_argument(
+        "--train-size",
+        type=int,
+        default=500,
+        help="Training window size in bars for walk-forward (default: 500)",
+    )
+    parser.add_argument(
+        "--test-size",
+        type=int,
+        default=100,
+        help="Test window size in bars for walk-forward (default: 100)",
+    )
+    parser.add_argument(
+        "--step-size",
+        type=int,
+        default=50,
+        help="Step size in bars for walk-forward (default: 50)",
+    )
+
+    # Grid search arguments
+    parser.add_argument(
+        "--grid-search",
+        action="store_true",
+        help="Run parallel parameter grid search optimization",
+    )
+    parser.add_argument(
+        "--grid-workers",
+        type=int,
+        default=4,
+        help="Number of parallel workers for grid search (default: 4, -1 for CPU count)",
+    )
+    parser.add_argument(
+        "--grid-metric",
+        type=str,
+        default="sharpe_ratio",
+        choices=["sharpe_ratio", "sortino_ratio", "total_return", "profit_factor", "win_rate"],
+        help="Metric to optimize in grid search (default: sharpe_ratio)",
+    )
+    parser.add_argument(
+        "--grid-min-trades",
+        type=int,
+        default=10,
+        help="Minimum trades required for valid grid search result (default: 10)",
+    )
+    parser.add_argument(
+        "--grid-early-stop",
+        type=float,
+        default=None,
+        help="Early stop threshold for grid search metric",
+    )
+    parser.add_argument(
+        "--grid-memory-limit",
+        type=float,
+        default=0,
+        help="Memory limit per worker in MB (0 = unlimited)",
+    )
+    parser.add_argument(
+        "--grid-cache-dir",
+        type=Path,
+        default=None,
+        help="Directory for grid search result caching",
+    )
+    parser.add_argument(
+        "--grid-no-cache",
+        action="store_true",
+        help="Disable grid search result caching",
+    )
+    parser.add_argument(
+        "--grid-params",
+        type=str,
+        default=None,
+        help="JSON string of parameter grid, e.g., '{\"lookback\": [10, 20], \"threshold\": [0.01, 0.02]}'",
+    )
+
     return parser.parse_args()
 
 
@@ -454,6 +555,328 @@ def generate_demo_data() -> tuple[pl.DataFrame, list[Any]]:
     return market_data, signals
 
 
+class BacktestFoldEvaluator:
+    """
+    Picklable evaluator for walk-forward backtesting.
+
+    This class stores the backtest configuration and signals,
+    and can be pickled for multiprocessing.
+    """
+
+    def __init__(
+        self,
+        backtest_config: Any,
+        signals: list[Any],
+    ) -> None:
+        """
+        Initialize the evaluator.
+
+        Args:
+            backtest_config: BacktestConfig instance
+            signals: List of trading signals
+        """
+        self.backtest_config = backtest_config
+        self.signals = signals
+
+    def __call__(
+        self,
+        train_df: pl.DataFrame,
+        test_df: pl.DataFrame,
+        fold_idx: int,
+    ) -> Any:
+        """
+        Evaluate a single fold.
+
+        Args:
+            train_df: Training data
+            test_df: Test data
+            fold_idx: Fold index
+
+        Returns:
+            FoldResult with metrics
+        """
+        from backtester_py.engine import BacktestEngine
+        from backtester_py.metrics import MetricsCalculator
+        from backtester_py.walk_forward import FoldResult
+
+        # Create a fresh engine for this fold
+        fold_engine = BacktestEngine(self.backtest_config, enable_logging=False)
+
+        # Filter signals for this time period
+        test_start = test_df["timestamp"].min()
+        test_end = test_df["timestamp"].max()
+
+        test_signals = [
+            s for s in self.signals
+            if test_start <= s.timestamp <= test_end
+        ]
+
+        # Run backtest on test data
+        if test_signals:
+            result = fold_engine.run(test_df, test_signals)
+
+            # Calculate metrics
+            calculator = MetricsCalculator()
+            trades = [{"pnl": f.notional} for f in result.fills]
+
+            if not result.equity_curve.is_empty():
+                metrics = calculator.calculate(result.equity_curve, trades)
+                return FoldResult(
+                    fold_index=fold_idx,
+                    train_size=len(train_df),
+                    test_size=len(test_df),
+                    sharpe_ratio=metrics.sharpe_ratio,
+                    max_drawdown=metrics.max_drawdown,
+                    total_return=metrics.total_return,
+                    win_rate=metrics.win_rate,
+                    num_trades=metrics.num_trades,
+                )
+
+        # Return empty result if no signals
+        return FoldResult(
+            fold_index=fold_idx,
+            train_size=len(train_df),
+            test_size=len(test_df),
+        )
+
+
+def run_walk_forward_mode(
+    args: argparse.Namespace,
+    engine: Any,
+    market_data: pl.DataFrame,
+    signals: list[Any],
+    config: BacktestRunConfig,
+    ui: BacktesterUI,
+    backtest_config: Any,
+) -> int:
+    """
+    Run walk-forward optimization mode.
+
+    Supports both sequential and parallel execution.
+
+    Args:
+        args: Parsed command-line arguments
+        engine: BacktestEngine instance
+        market_data: Market data DataFrame
+        signals: Trading signals
+        config: Backtest run configuration
+        ui: BacktesterUI instance
+        backtest_config: BacktestConfig instance
+
+    Returns:
+        Exit code (0 for success)
+    """
+    import os
+    from backtester_py.walk_forward import (
+        WalkForwardOptimizer,
+        ParallelConfig,
+    )
+
+    console.print(
+        f"[bold cyan]Walk-Forward Optimization[/bold cyan] "
+        f"({'parallel' if config.parallel else 'sequential'} mode)\n"
+    )
+    console.print(f"  Train size: {args.train_size} bars")
+    console.print(f"  Test size: {args.test_size} bars")
+    console.print(f"  Step size: {args.step_size} bars")
+
+    if config.parallel:
+        workers = config.max_workers or max(1, (os.cpu_count() or 2) - 1)
+        console.print(f"  Workers: {workers}")
+        if args.timeout > 0:
+            console.print(f"  Timeout: {args.timeout}s per fold")
+    console.print()
+
+    # Create walk-forward optimizer
+    optimizer = WalkForwardOptimizer(
+        train_size=args.train_size,
+        test_size=args.test_size,
+        step_size=args.step_size,
+        console=console,
+    )
+
+    # Create picklable evaluator (required for parallel multiprocessing)
+    evaluator = BacktestFoldEvaluator(backtest_config, signals)
+
+    # Run optimization
+    if config.parallel:
+        parallel_config = ParallelConfig(
+            max_workers=config.max_workers or max(1, (os.cpu_count() or 2) - 1),
+            timeout_per_fold=args.timeout,
+            log_worker_memory=args.log_level == "DEBUG",
+        )
+
+        wf_result = optimizer.run_parallel(
+            market_data,
+            evaluator,
+            parallel_config=parallel_config,
+            show_progress=True,
+        )
+    else:
+        wf_result = optimizer.run_with_progress(
+            market_data,
+            evaluator,
+            show_progress=True,
+        )
+
+    # Display results
+    ui.show_walk_forward_results(wf_result)
+
+    # Log summary
+    logger.info(
+        "walk_forward_complete",
+        strategy=config.strategy_name,
+        total_folds=wf_result.total_folds,
+        avg_sharpe=wf_result.avg_sharpe,
+        std_sharpe=wf_result.std_sharpe,
+        avg_return=wf_result.avg_return,
+        avg_max_drawdown=wf_result.avg_max_drawdown,
+        parallel=config.parallel,
+    )
+
+    return 0
+
+
+def run_grid_search_mode(
+    args: argparse.Namespace,
+    engine: Any,
+    market_data: pl.DataFrame,
+    signals: list[Any],
+    config: BacktestRunConfig,
+) -> int:
+    """
+    Run grid search optimization mode.
+
+    Args:
+        args: Parsed command-line arguments
+        engine: BacktestEngine instance
+        market_data: Market data DataFrame
+        signals: Trading signals
+        config: Backtest run configuration
+
+    Returns:
+        Exit code (0 for success)
+    """
+    import json
+
+    from backtester_py.parallel_optimizer import ParallelGridSearch
+
+    console.print("\n[bold cyan]Grid Search Optimization Mode[/bold cyan]\n")
+
+    # Parse parameter grid
+    if args.grid_params:
+        try:
+            param_grid = json.loads(args.grid_params)
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error parsing --grid-params JSON: {e}[/red]")
+            return 1
+    else:
+        # Default demo parameter grid
+        console.print("[dim]Using default demo parameter grid...[/dim]")
+        param_grid = {
+            "stop_loss": [0.01, 0.02, 0.03, 0.05],
+            "take_profit": [0.02, 0.04, 0.06, 0.10],
+        }
+
+    # Display grid info
+    total_combinations = 1
+    for values in param_grid.values():
+        total_combinations *= len(values)
+
+    console.print("[cyan]Parameter Grid:[/cyan]")
+    for param, values in param_grid.items():
+        console.print(f"  {param}: {values}")
+    console.print(f"\n[cyan]Total combinations:[/cyan] {total_combinations}")
+    console.print(f"[cyan]Workers:[/cyan] {args.grid_workers}")
+    console.print(f"[cyan]Metric:[/cyan] {args.grid_metric}")
+    console.print(f"[cyan]Min trades:[/cyan] {args.grid_min_trades}")
+    if args.grid_early_stop:
+        console.print(f"[cyan]Early stop threshold:[/cyan] {args.grid_early_stop}")
+    if args.grid_memory_limit > 0:
+        console.print(f"[cyan]Memory limit:[/cyan] {args.grid_memory_limit} MB")
+    console.print()
+
+    # Create optimizer
+    optimizer = ParallelGridSearch(
+        engine=engine,
+        max_workers=args.grid_workers,
+        memory_limit_mb=args.grid_memory_limit,
+        cache_dir=args.grid_cache_dir,
+        console=console,
+    )
+
+    # Run grid search
+    summary = optimizer.run_grid_search(
+        param_grid=param_grid,
+        market_data=market_data,
+        signals=signals,
+        metric=args.grid_metric,
+        min_trades=args.grid_min_trades,
+        early_stop_threshold=args.grid_early_stop,
+        use_cache=not args.grid_no_cache,
+    )
+
+    # Display results
+    console.print()
+    console.print(summary.summary_table(console, top_n=15))
+
+    if summary.best_result:
+        console.print("\n[bold green]Best Parameters:[/bold green]")
+        for param, value in summary.best_result.params.items():
+            console.print(f"  {param}: {value}")
+        console.print(
+            f"\n[bold]Best {args.grid_metric}:[/bold] "
+            f"{summary.best_result.get_metric(args.grid_metric):.4f}"
+        )
+
+    # Save results to file if output dir specified
+    if config.output_dir:
+        output_path = (
+            config.output_dir
+            / f"grid_search_{config.strategy_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        )
+        config.output_dir.mkdir(parents=True, exist_ok=True)
+
+        results_json = {
+            "strategy": config.strategy_name,
+            "metric": args.grid_metric,
+            "total_combinations": summary.total_combinations,
+            "successful_runs": summary.successful_runs,
+            "failed_runs": summary.failed_runs,
+            "total_time_seconds": summary.total_time_seconds,
+            "early_stopped": summary.early_stopped,
+            "best_params": summary.best_result.params if summary.best_result else None,
+            "best_metrics": summary.best_result.metrics if summary.best_result else None,
+            "top_results": [
+                {
+                    "params": r.params,
+                    "sharpe_ratio": r.sharpe_ratio,
+                    "total_return": r.total_return,
+                    "max_drawdown": r.max_drawdown,
+                    "num_trades": r.num_trades,
+                }
+                for r in summary.top_n(20)
+            ],
+        }
+
+        with open(output_path, "w") as f:
+            json.dump(results_json, f, indent=2, default=str)
+
+        console.print(f"\n[dim]Results saved to: {output_path}[/dim]")
+
+    logger.info(
+        "grid_search_complete",
+        strategy=config.strategy_name,
+        total_combinations=summary.total_combinations,
+        successful=summary.successful_runs,
+        best_metric=(
+            summary.best_result.get_metric(args.grid_metric) if summary.best_result else None
+        ),
+    )
+
+    return 0
+
+
 def main() -> int:
     """Main entry point for the backtester CLI."""
     args = parse_args()
@@ -471,6 +894,8 @@ def main() -> int:
         generate_html=not args.no_html,
         show_trades=not args.no_trades,
         log_level=args.log_level,
+        parallel=args.parallel,
+        max_workers=args.workers,
     )
 
     # Initialize UI
@@ -533,6 +958,16 @@ def main() -> int:
         )
 
         engine = BacktestEngine(backtest_config)
+
+        # Check if grid search mode
+        if args.grid_search:
+            return run_grid_search_mode(args, engine, market_data, signals, config)
+
+        # Check if walk-forward mode
+        if args.walk_forward:
+            return run_walk_forward_mode(
+                args, engine, market_data, signals, config, ui, backtest_config
+            )
 
         # Run backtest with live display
         result, metrics = ui.run_with_live_display(

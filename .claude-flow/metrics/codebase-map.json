@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-01-16T19:02:05.808Z",
+  "timestamp": "2026-01-16T20:52:09.149Z",
   "projectRoot": "/home/bw/Projects/autoBot",
   "structure": {
     "hasPackageJson": false,
@@ -7,5 +7,5 @@
     "hasClaudeConfig": true,
     "hasClaudeFlow": true
   },
-  "scannedAt": 1768590125808
+  "scannedAt": 1768596729149
 }

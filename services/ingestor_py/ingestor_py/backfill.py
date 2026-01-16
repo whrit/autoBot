@@ -7,8 +7,15 @@ logging and progress tracking.
 
 Optimized for streaming writes with day-by-day processing and
 real-time progress updates showing throughput and current status.
+
+Supports both sequential and parallel modes:
+- Sequential: Traditional day-by-day processing (lower API usage).
+- Parallel: Concurrent symbol fetching using asyncio (faster for many symbols).
 """
 
+from __future__ import annotations
+
+import asyncio
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
@@ -26,7 +33,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-from ingestor_py.client import AlpacaDataClient
+from ingestor_py.client import AlpacaDataClient, AsyncAlpacaDataClient, SymbolFetchResult
 from ingestor_py.logging_config import (
     FileProgress,
     console,
@@ -855,3 +862,439 @@ class BackfillOrchestrator:
         end = datetime.now(UTC)
         start = end - timedelta(days=days)
         return self.backfill_with_progress(symbols, start, end, data_types)
+
+
+class AsyncBackfillOrchestrator:
+    """Async orchestrator for parallel historical data backfill.
+
+    Uses AsyncAlpacaDataClient for concurrent fetching of multiple symbols
+    and data types. Includes rate limiting and error handling.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        api_secret: str,
+        lake_path: Path | str,
+        feed: str = "iex",
+        requests_per_minute: int = 200,
+        max_concurrent: int = 10,
+    ) -> None:
+        """Initialize the async backfill orchestrator.
+
+        Args:
+            api_key: Alpaca API key.
+            api_secret: Alpaca API secret.
+            lake_path: Path to the data lake directory.
+            feed: Data feed ('iex' or 'sip').
+            requests_per_minute: Rate limit (default: 200 for Alpaca).
+            max_concurrent: Maximum concurrent requests (default: 10).
+        """
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.feed = feed
+        self.requests_per_minute = requests_per_minute
+        self.max_concurrent = max_concurrent
+        self.writer = ParquetWriter(base_path=lake_path)
+        self.lake_path = Path(lake_path)
+        self.stats = BackfillStats()
+
+        logger.info(
+            "async_backfill_orchestrator_initialized",
+            lake_path=str(lake_path),
+            feed=feed,
+            requests_per_minute=requests_per_minute,
+            max_concurrent=max_concurrent,
+        )
+
+    def _iter_days(
+        self,
+        start: datetime,
+        end: datetime,
+    ) -> list[tuple[datetime, datetime]]:
+        """Generate day-by-day date ranges for streaming processing.
+
+        Args:
+            start: Start datetime.
+            end: End datetime.
+
+        Returns:
+            List of (day_start, day_end) tuples for each day in range.
+        """
+        days: list[tuple[datetime, datetime]] = []
+        current = start.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        while current < end:
+            day_start = current
+            day_end = min(current + timedelta(days=1), end)
+            days.append((day_start, day_end))
+            current = day_end
+
+        return days
+
+    def _create_progress(self) -> ProgressType:
+        """Create a progress tracker for backfill tracking.
+
+        Returns Rich Progress for interactive terminals, or FileProgress
+        for file-redirected output (e.g., nohup).
+        """
+        if is_file_mode():
+            logger.debug("using_file_progress_mode")
+            return FileProgress(log_interval=10.0, console=console)
+
+        return Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.fields[symbol]}"),
+            BarColumn(bar_width=30),
+            MofNCompleteColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TextColumn("[dim]|"),
+            TextColumn("[yellow]{task.fields[current_day]}[/]"),
+            TextColumn("[dim]|"),
+            TextColumn("[green]{task.fields[records]}[/] rec"),
+            TextColumn("[dim]|"),
+            TextColumn("[magenta]{task.fields[throughput]}[/]/s"),
+            TextColumn("[dim]|"),
+            TimeElapsedColumn(),
+            TextColumn("[dim]ETA"),
+            TimeRemainingColumn(),
+            console=console,
+            expand=False,
+        )
+
+    async def _write_results(
+        self,
+        results: dict[str, SymbolFetchResult],
+        data_type: str,
+    ) -> int:
+        """Write fetched results to Parquet files.
+
+        Args:
+            results: Dictionary mapping symbol to fetch results.
+            data_type: Type of data ('trades', 'quotes', 'bars').
+
+        Returns:
+            Total bytes written.
+        """
+        total_bytes = 0
+
+        for symbol, result in results.items():
+            if not result.success or not result.data:
+                if not result.success:
+                    logger.warning(
+                        f"skipping_failed_{data_type}",
+                        symbol=symbol,
+                        error=result.error,
+                    )
+                continue
+
+            write_start = time.time()
+
+            if data_type == "trades":
+                bytes_written = self.writer.write_trades(result.data)
+            elif data_type == "quotes":
+                bytes_written = self.writer.write_quotes(result.data)
+            elif data_type == "bars":
+                bytes_written = self.writer.write_bars(result.data)
+            else:
+                continue
+
+            write_elapsed = time.time() - write_start
+            total_bytes += bytes_written
+
+            # Update stats
+            if symbol in self.stats.symbols:
+                if data_type == "trades":
+                    self.stats.symbols[symbol].trades_count += len(result.data)
+                elif data_type == "quotes":
+                    self.stats.symbols[symbol].quotes_count += len(result.data)
+                elif data_type == "bars":
+                    self.stats.symbols[symbol].bars_count += len(result.data)
+                self.stats.symbols[symbol].bytes_written += bytes_written
+
+            logger.debug(
+                f"{data_type}_written",
+                symbol=symbol,
+                count=len(result.data),
+                bytes_written=format_bytes(bytes_written),
+                write_time=f"{write_elapsed:.2f}s",
+            )
+
+        return total_bytes
+
+    async def backfill_parallel(
+        self,
+        symbols: list[str],
+        start: datetime,
+        end: datetime,
+        data_types: list[str] | None = None,
+    ) -> BackfillStats:
+        """Backfill historical data for multiple symbols in parallel.
+
+        Fetches all symbols concurrently for each day, respecting rate limits.
+        If one symbol fails, continues with others.
+
+        Args:
+            symbols: List of stock symbols to backfill.
+            start: Start datetime.
+            end: End datetime.
+            data_types: List of data types to backfill.
+
+        Returns:
+            BackfillStats with comprehensive statistics.
+        """
+        if data_types is None:
+            data_types = ["trades", "quotes", "bars"]
+
+        self.stats = BackfillStats()
+        days = self._iter_days(start, end)
+        total_days = len(days)
+
+        # Initialize symbol stats
+        for symbol in symbols:
+            self.stats.symbols[symbol] = SymbolStats(
+                symbol=symbol,
+                total_days=total_days,
+            )
+
+        logger.info(
+            "parallel_backfill_started",
+            symbols=symbols,
+            start=start.isoformat(),
+            end=end.isoformat(),
+            data_types=data_types,
+            total_days=total_days,
+            mode="parallel",
+        )
+
+        console.print(
+            f"\n[bold]Parallel Backfill[/bold] "
+            f"({len(symbols)} symbols x {total_days} days x {len(data_types)} types)"
+        )
+
+        progress = self._create_progress()
+
+        async with AsyncAlpacaDataClient(
+            api_key=self.api_key,
+            api_secret=self.api_secret,
+            feed=self.feed,
+            requests_per_minute=self.requests_per_minute,
+            max_concurrent=self.max_concurrent,
+        ) as client:
+            with progress:
+                # Create overall task
+                overall_task = progress.add_task(
+                    "Overall",
+                    total=total_days * len(data_types),
+                    symbol="ALL",
+                    current_day="starting...",
+                    records="0",
+                    throughput="0",
+                )
+
+                for day_idx, (day_start, day_end) in enumerate(days):
+                    day_str = day_start.strftime("%Y-%m-%d")
+
+                    # Update all symbol stats with current day
+                    for symbol in symbols:
+                        self.stats.symbols[symbol].current_day = day_str
+
+                    progress.update(
+                        overall_task,
+                        current_day=day_str,
+                        records=format_number(self.stats.total_records),
+                        throughput=format_number(int(self.stats.avg_throughput)),
+                    )
+
+                    # Fetch each data type for all symbols in parallel
+                    for dtype in data_types:
+                        fetch_start = time.time()
+
+                        try:
+                            if dtype == "trades":
+                                results = await client.get_trades_multi(
+                                    symbols, day_start, day_end
+                                )
+                            elif dtype == "quotes":
+                                results = await client.get_quotes_multi(
+                                    symbols, day_start, day_end
+                                )
+                            elif dtype == "bars":
+                                results = await client.get_bars_multi(
+                                    symbols, day_start, day_end
+                                )
+                            else:
+                                continue
+
+                            # Write results
+                            await self._write_results(results, dtype)
+
+                            fetch_elapsed = time.time() - fetch_start
+                            total_count = sum(
+                                len(r.data) for r in results.values() if r.success
+                            )
+                            failed_count = sum(
+                                1 for r in results.values() if not r.success
+                            )
+
+                            logger.info(
+                                f"parallel_{dtype}_batch_complete",
+                                day=day_str,
+                                symbols_count=len(symbols),
+                                records_count=total_count,
+                                failed_count=failed_count,
+                                elapsed=f"{fetch_elapsed:.2f}s",
+                            )
+
+                        except Exception as e:
+                            logger.error(
+                                f"parallel_{dtype}_batch_failed",
+                                day=day_str,
+                                error=str(e),
+                                exc_info=True,
+                            )
+                            # Continue with next data type
+
+                        progress.advance(overall_task)
+                        progress.update(
+                            overall_task,
+                            records=format_number(self.stats.total_records),
+                            throughput=format_number(int(self.stats.avg_throughput)),
+                        )
+
+                    # Update days completed for all symbols
+                    for symbol in symbols:
+                        self.stats.symbols[symbol].days_completed = day_idx + 1
+
+        # Finalize stats
+        self.stats.end_time = time.time()
+        for symbol in symbols:
+            self.stats.symbols[symbol].end_time = time.time()
+
+        logger.info(
+            "parallel_backfill_complete",
+            total_trades=self.stats.total_trades,
+            total_quotes=self.stats.total_quotes,
+            total_bars=self.stats.total_bars,
+            total_bytes=format_bytes(self.stats.total_bytes),
+            elapsed=format_duration(self.stats.elapsed),
+            avg_throughput=f"{self.stats.avg_throughput:.0f} records/sec",
+            mode="parallel",
+        )
+
+        return self.stats
+
+    async def backfill_date_range_parallel(
+        self,
+        symbols: list[str],
+        days: int = 30,
+        data_types: list[str] | None = None,
+    ) -> BackfillStats:
+        """Backfill historical data for the last N days in parallel.
+
+        Args:
+            symbols: List of stock symbols.
+            days: Number of days to backfill (default: 30).
+            data_types: List of data types to backfill.
+
+        Returns:
+            BackfillStats with comprehensive statistics.
+        """
+        end = datetime.now(UTC)
+        start = end - timedelta(days=days)
+        return await self.backfill_parallel(symbols, start, end, data_types)
+
+    async def backfill_symbol_all_types(
+        self,
+        symbol: str,
+        start: datetime,
+        end: datetime,
+        data_types: list[str] | None = None,
+    ) -> SymbolStats:
+        """Backfill all data types for a single symbol concurrently.
+
+        Fetches trades, quotes, and bars in parallel for each day.
+
+        Args:
+            symbol: Stock ticker symbol.
+            start: Start datetime.
+            end: End datetime.
+            data_types: List of data types to backfill.
+
+        Returns:
+            SymbolStats for the symbol.
+        """
+        if data_types is None:
+            data_types = ["trades", "quotes", "bars"]
+
+        days = self._iter_days(start, end)
+        stats = SymbolStats(symbol=symbol, total_days=len(days))
+
+        logger.info(
+            "parallel_symbol_backfill_started",
+            symbol=symbol,
+            start=start.isoformat(),
+            end=end.isoformat(),
+            data_types=data_types,
+        )
+
+        async with AsyncAlpacaDataClient(
+            api_key=self.api_key,
+            api_secret=self.api_secret,
+            feed=self.feed,
+            requests_per_minute=self.requests_per_minute,
+            max_concurrent=self.max_concurrent,
+        ) as client:
+            for day_idx, (day_start, day_end) in enumerate(days):
+                day_str = day_start.strftime("%Y-%m-%d")
+                stats.current_day = day_str
+
+                try:
+                    # Fetch all data types concurrently
+                    results = await client.get_all_data_for_symbol(
+                        symbol, day_start, day_end, data_types
+                    )
+
+                    # Write results
+                    for dtype, result in results.items():
+                        if not result.success or not result.data:
+                            continue
+
+                        if dtype == "trades":
+                            bytes_written = self.writer.write_trades(result.data)
+                            stats.trades_count += len(result.data)
+                        elif dtype == "quotes":
+                            bytes_written = self.writer.write_quotes(result.data)
+                            stats.quotes_count += len(result.data)
+                        elif dtype == "bars":
+                            bytes_written = self.writer.write_bars(result.data)
+                            stats.bars_count += len(result.data)
+                        else:
+                            continue
+
+                        stats.bytes_written += bytes_written
+
+                except Exception as e:
+                    logger.error(
+                        "parallel_symbol_day_failed",
+                        symbol=symbol,
+                        day=day_str,
+                        error=str(e),
+                    )
+                    # Continue with next day
+
+                stats.days_completed = day_idx + 1
+
+        stats.end_time = time.time()
+
+        logger.info(
+            "parallel_symbol_backfill_complete",
+            symbol=symbol,
+            trades=stats.trades_count,
+            quotes=stats.quotes_count,
+            bars=stats.bars_count,
+            bytes_written=format_bytes(stats.bytes_written),
+            elapsed=format_duration(stats.elapsed),
+        )
+
+        return stats

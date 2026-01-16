@@ -367,6 +367,8 @@ class BacktestEngine:
             trade_summary = (
                 self._trade_buffer.get_summary() if self._trade_buffer else {}
             )
+            # Filter out total_trades from trade_summary to avoid duplicate kwarg
+            filtered_summary = {k: v for k, v in trade_summary.items() if k != "total_trades"}
             logger.info(
                 "backtest_completed",
                 total_signals=total_signals,
@@ -375,7 +377,7 @@ class BacktestEngine:
                     p.realized_pnl + p.unrealized_pnl for p in self._positions.values()
                 ),
                 risk_violations=len(self._risk_violations),
-                **trade_summary,
+                **filtered_summary,
             )
 
         # Calculate final results
@@ -1014,13 +1016,15 @@ class BacktestEngine:
             trade_summary = (
                 self._trade_buffer.get_summary() if self._trade_buffer else {}
             )
+            # Filter out total_trades from trade_summary to avoid duplicate kwarg
+            filtered_summary = {k: v for k, v in trade_summary.items() if k != "total_trades"}
             logger.info(
                 "chunked_backtest_completed",
                 total_signals=total_signals,
                 total_trades=len(self._fills),
                 fills_dropped=self._memory_stats.fills_dropped,
                 peak_memory_mb=self._memory_stats.peak_memory_mb,
-                **trade_summary,
+                **filtered_summary,
             )
 
         return self._build_result()
