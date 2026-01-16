@@ -5,7 +5,7 @@ This module provides shadow execution mode that simulates trading signals
 without placing real orders, useful for validation and analysis.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -22,6 +22,26 @@ from runner_py.types import (
 )
 
 logger = structlog.get_logger(__name__)
+
+
+@dataclass
+class SignalSummary:
+    """Summary of signals by type for reporting."""
+
+    buy_count: int = 0
+    sell_count: int = 0
+    hold_count: int = 0
+    total_notional: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "buy_count": self.buy_count,
+            "sell_count": self.sell_count,
+            "hold_count": self.hold_count,
+            "total_signals": self.buy_count + self.sell_count + self.hold_count,
+            "total_notional": self.total_notional,
+        }
 
 
 @dataclass
@@ -64,13 +84,19 @@ class ShadowExecutor:
         self._positions: dict[str, Position] = {}
         self._trade_history: list[ShadowFill] = []
         self._market_prices: dict[str, float] = {}
-
-        # Ensure log directory exists
-        logger.info(
-            "shadow_executor_initialized",
+        self._signal_summary = SignalSummary()
+        self._session_start = datetime.now(UTC)
+        self._logger = logger.bind(
+            component="shadow_executor",
             strategy_id=config.strategy_id,
+        )
+
+        self._logger.info(
+            "shadow_executor_initialized",
             symbols=config.symbols,
             max_position_size=config.max_position_size,
+            slippage_model_bps=config.slippage_model_bps,
+            check_risk_limits=config.check_risk_limits,
         )
 
     def execute(
@@ -86,14 +112,34 @@ class ShadowExecutor:
         Returns:
             ShadowExecutionResult with simulated fill
         """
+        # Log incoming signal with full structured context
+        self._logger.info(
+            "signal_received",
+            symbol=signal.symbol,
+            signal_type=signal.signal_type.value,
+            strength=signal.strength,
+            target_notional=signal.target_notional,
+            timestamp=signal.timestamp.isoformat(),
+            market_bid=market_data.bid,
+            market_ask=market_data.ask,
+            market_mid=market_data.mid,
+            spread_bps=market_data.spread_bps,
+        )
+
+        # Update signal summary
+        self._update_signal_summary(signal)
+
         # Check risk limits if enabled
         if self.config.check_risk_limits:
             passed, reason = self.check_risk_limits(signal)
             if not passed:
-                logger.warning(
+                self._logger.warning(
                     "risk_limit_failed",
                     symbol=signal.symbol,
+                    signal_type=signal.signal_type.value,
                     reason=reason,
+                    strength=signal.strength,
+                    target_notional=signal.target_notional,
                 )
                 return ShadowExecutionResult(
                     mode=ExecutionMode.SHADOW,
@@ -107,6 +153,11 @@ class ShadowExecutor:
         if signal.signal_type == SignalDirection.FLAT:
             current_pos = self.get_position(signal.symbol)
             if current_pos == 0:
+                self._logger.info(
+                    "flat_signal_no_position",
+                    symbol=signal.symbol,
+                    message="No position to close",
+                )
                 return ShadowExecutionResult(
                     mode=ExecutionMode.SHADOW,
                     signal=signal,
@@ -125,12 +176,27 @@ class ShadowExecutor:
             self.update_position(fill)
             self._trade_history.append(fill)
 
-        logger.info(
+            # Log the simulated trade (would-be trade)
+            self._logger.info(
+                "would_be_trade",
+                symbol=signal.symbol,
+                direction=signal.signal_type.value,
+                simulated_price=fill.simulated_price,
+                slippage_bps=fill.simulated_slippage_bps,
+                effective_notional=signal.target_notional * signal.strength,
+                timestamp=fill.timestamp.isoformat(),
+                position_after=self.get_position(signal.symbol),
+                total_pnl=self.get_total_pnl(),
+            )
+
+        self._logger.info(
             "shadow_execution_complete",
             symbol=signal.symbol,
             direction=signal.signal_type.value,
             price=fill.simulated_price,
             would_execute=fill.would_have_executed,
+            success=fill.would_have_executed,
+            trade_count=len(self._trade_history),
         )
 
         return ShadowExecutionResult(
@@ -142,6 +208,17 @@ class ShadowExecutor:
             if fill.would_have_executed
             else "Execution failed",
         )
+
+    def _update_signal_summary(self, signal: Signal) -> None:
+        """Update the signal summary counters."""
+        if signal.signal_type == SignalDirection.LONG:
+            self._signal_summary.buy_count += 1
+        elif signal.signal_type == SignalDirection.SHORT:
+            self._signal_summary.sell_count += 1
+        elif signal.signal_type == SignalDirection.FLAT:
+            self._signal_summary.hold_count += 1
+
+        self._signal_summary.total_notional += signal.target_notional * signal.strength
 
     def simulate_fill(self, signal: Signal, market_data: MarketData) -> ShadowFill:
         """
@@ -172,6 +249,16 @@ class ShadowExecutor:
         slippage_amount = base_price * (self.config.slippage_model_bps / 10000)
         simulated_price = base_price + (slippage_amount * slippage_direction)
 
+        self._logger.debug(
+            "fill_simulation",
+            symbol=signal.symbol,
+            direction=signal.signal_type.value,
+            base_price=base_price,
+            slippage_bps=self.config.slippage_model_bps,
+            slippage_amount=slippage_amount,
+            simulated_price=simulated_price,
+        )
+
         return ShadowFill(
             signal=signal,
             simulated_price=simulated_price,
@@ -195,6 +282,14 @@ class ShadowExecutor:
 
         slippage_amount = base_price * (self.config.slippage_model_bps / 10000)
         simulated_price = base_price + (slippage_amount * slippage_direction)
+
+        self._logger.info(
+            "closing_position",
+            symbol=signal.symbol,
+            position_size=position,
+            close_price=simulated_price,
+            slippage_bps=self.config.slippage_model_bps,
+        )
 
         return ShadowFill(
             signal=signal,
@@ -264,6 +359,8 @@ class ShadowExecutor:
             # Close position
             quantity = -self.get_position(symbol)
 
+        old_qty = self.get_position(symbol)
+
         if symbol not in self._positions:
             self._positions[symbol] = Position(
                 symbol=symbol,
@@ -287,6 +384,13 @@ class ShadowExecutor:
                 pos.realized_pnl += realized_pnl
                 pos.quantity = 0
                 pos.avg_price = 0
+
+                self._logger.info(
+                    "position_closed",
+                    symbol=symbol,
+                    realized_pnl=realized_pnl,
+                    total_realized_pnl=pos.realized_pnl,
+                )
             elif (old_qty > 0 and quantity > 0) or (old_qty < 0 and quantity < 0):
                 # Adding to position - weighted average
                 total_cost = (abs(old_qty) * pos.avg_price) + (abs(quantity) * fill.simulated_price)
@@ -316,6 +420,16 @@ class ShadowExecutor:
         # Update market price for unrealized P&L
         self._market_prices[symbol] = fill.simulated_price
 
+        # Log position update
+        self._logger.info(
+            "position_updated",
+            symbol=symbol,
+            old_quantity=old_qty,
+            new_quantity=self.get_position(symbol),
+            avg_price=self._positions[symbol].avg_price if symbol in self._positions else 0,
+            fill_price=fill.simulated_price,
+        )
+
     def mark_to_market(self, market_data: MarketData) -> None:
         """
         Update unrealized P&L based on current market data.
@@ -326,8 +440,17 @@ class ShadowExecutor:
         symbol = market_data.symbol
         if symbol in self._positions:
             mark_price = market_data.mid
+            old_unrealized = self._positions[symbol].unrealized_pnl
             self._positions[symbol].update_unrealized_pnl(mark_price)
             self._market_prices[symbol] = mark_price
+
+            self._logger.debug(
+                "mark_to_market",
+                symbol=symbol,
+                mark_price=mark_price,
+                old_unrealized_pnl=old_unrealized,
+                new_unrealized_pnl=self._positions[symbol].unrealized_pnl,
+            )
 
     def get_pnl(self) -> dict[str, float]:
         """
@@ -359,6 +482,30 @@ class ShadowExecutor:
         """
         return list(self._trade_history)
 
+    def get_signal_summary(self) -> dict[str, Any]:
+        """
+        Get summary of signals processed by type.
+
+        Returns:
+            Dictionary with signal counts by type
+        """
+        return self._signal_summary.to_dict()
+
+    def log_session_summary(self) -> None:
+        """Log a comprehensive session summary."""
+        session_duration = (datetime.now(UTC) - self._session_start).total_seconds()
+
+        self._logger.info(
+            "session_summary",
+            strategy_id=self.config.strategy_id,
+            session_duration_seconds=session_duration,
+            total_trades=len(self._trade_history),
+            total_pnl=self.get_total_pnl(),
+            signal_summary=self._signal_summary.to_dict(),
+            positions=self.get_position_summary(),
+            pnl_by_symbol=self.get_pnl(),
+        )
+
     def get_metrics(self) -> dict[str, Any]:
         """
         Get executor metrics.
@@ -371,6 +518,8 @@ class ShadowExecutor:
             "total_pnl": self.get_total_pnl(),
             "positions": {s: p.to_dict() for s, p in self._positions.items()},
             "strategy_id": self.config.strategy_id,
+            "signal_summary": self._signal_summary.to_dict(),
+            "session_start": self._session_start.isoformat(),
         }
 
     def get_position_summary(self) -> dict[str, dict[str, Any]]:

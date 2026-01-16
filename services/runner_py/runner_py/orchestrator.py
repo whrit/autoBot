@@ -73,6 +73,15 @@ class ScheduleFrequency(str, Enum):
     WEEKLY = "weekly"
 
 
+class StrategyState(str, Enum):
+    """State of a strategy in the promotion workflow."""
+
+    SHADOW = "shadow"
+    PAPER = "paper"
+    LIVE = "live"
+    DISABLED = "disabled"
+
+
 @dataclass
 class ScheduledTask:
     """A scheduled task in the autonomous loop."""
@@ -85,6 +94,22 @@ class ScheduledTask:
     last_run: datetime | None = None
     next_run: datetime | None = None
     handler: Callable[[], Any] | None = None
+    run_count: int = 0
+    error_count: int = 0
+    last_error: str | None = None
+    avg_duration_ms: float = 0.0
+
+
+@dataclass
+class PromotionEvent:
+    """Record of a strategy promotion/demotion event."""
+
+    strategy_id: str
+    from_state: StrategyState
+    to_state: StrategyState
+    timestamp: datetime
+    reason: str
+    metrics: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -136,7 +161,17 @@ class AutonomousOrchestrator:
         self._tasks: dict[TaskType, ScheduledTask] = {}
         self._running = False
         self._loop_task: asyncio.Task[None] | None = None
+        self._promotion_history: list[PromotionEvent] = []
+        self._strategy_states: dict[str, StrategyState] = {}
         self._logger = logger.bind(component="autonomous_orchestrator")
+
+        self._logger.info(
+            "orchestrator_created",
+            market_open=config.market_open.isoformat(),
+            market_close=config.market_close.isoformat(),
+            daily_eval_time=config.daily_eval_time.isoformat(),
+            weekly_optimization_day=config.weekly_optimization_day,
+        )
 
     def register_task(
         self,
@@ -155,7 +190,14 @@ class AutonomousOrchestrator:
             handler=handler,
         )
         self._tasks[task_type] = task
-        self._logger.debug("Registered task", task_type=task_type.value, frequency=frequency.value)
+
+        self._logger.info(
+            "task_registered",
+            task_type=task_type.value,
+            frequency=frequency.value,
+            time_of_day=time_of_day.isoformat() if time_of_day else None,
+            day_of_week=day_of_week,
+        )
 
     def schedule_default_tasks(self) -> None:
         """Set up the default autonomous loop schedule."""
@@ -182,23 +224,41 @@ class AutonomousOrchestrator:
             time_of_day=self.config.weekly_optimization_time,
             day_of_week=self.config.weekly_optimization_day,
         )
-        self._logger.info("Scheduled default tasks", task_count=len(self._tasks))
+
+        self._logger.info(
+            "default_tasks_scheduled",
+            task_count=len(self._tasks),
+            tasks=[t.value for t in self._tasks.keys()],
+        )
 
     async def start(self) -> None:
         """Start the autonomous loop."""
-        self._logger.info("Starting autonomous orchestrator")
+        self._logger.info(
+            "orchestrator_starting",
+            task_count=len(self._tasks),
+        )
+
         self._running = True
         self._loop_task = asyncio.create_task(self._run_loop())
         try:
             await self._loop_task
         except asyncio.CancelledError:
-            self._logger.info("Autonomous orchestrator cancelled")
+            self._logger.info("orchestrator_cancelled")
         finally:
             self._running = False
+            self._logger.info(
+                "orchestrator_stopped",
+                total_task_runs=sum(t.run_count for t in self._tasks.values()),
+                total_errors=sum(t.error_count for t in self._tasks.values()),
+            )
 
     async def stop(self) -> None:
         """Stop the autonomous loop gracefully."""
-        self._logger.info("Stopping autonomous orchestrator")
+        self._logger.info(
+            "orchestrator_stopping",
+            was_running=self._running,
+        )
+
         self._running = False
         if self._loop_task:
             self._loop_task.cancel()
@@ -208,6 +268,8 @@ class AutonomousOrchestrator:
 
     async def _run_loop(self) -> None:
         """Main loop that checks and executes scheduled tasks."""
+        self._logger.debug("main_loop_started")
+
         while self._running:
             await self._check_and_run_tasks()
             await asyncio.sleep(1)
@@ -254,20 +316,90 @@ class AutonomousOrchestrator:
     async def _execute_task(self, task: ScheduledTask) -> None:
         """Execute a scheduled task."""
         if task.handler is None:
-            self._logger.warning("Task has no handler", task_type=task.task_type.value)
+            self._logger.warning(
+                "task_no_handler",
+                task_type=task.task_type.value,
+            )
             return
+
+        start_time = datetime.now()
+        self._logger.info(
+            "task_execution_started",
+            task_type=task.task_type.value,
+            run_count=task.run_count + 1,
+            last_run=task.last_run.isoformat() if task.last_run else None,
+        )
+
         try:
-            self._logger.debug("Executing task", task_type=task.task_type.value)
             if inspect.iscoroutinefunction(task.handler):
                 await task.handler()
             else:
                 task.handler()
+
+            task.run_count += 1
             task.last_run = datetime.now()
-            self._logger.debug("Task completed", task_type=task.task_type.value)
-        except Exception as e:
-            self._logger.error(
-                "Task execution failed", task_type=task.task_type.value, error=str(e)
+
+            duration_ms = (task.last_run - start_time).total_seconds() * 1000
+            # Update rolling average
+            task.avg_duration_ms = (
+                (task.avg_duration_ms * (task.run_count - 1) + duration_ms) / task.run_count
             )
+
+            self._logger.info(
+                "task_execution_completed",
+                task_type=task.task_type.value,
+                duration_ms=round(duration_ms, 2),
+                avg_duration_ms=round(task.avg_duration_ms, 2),
+                run_count=task.run_count,
+            )
+        except Exception as e:
+            task.error_count += 1
+            task.last_error = str(e)
+
+            self._logger.error(
+                "task_execution_failed",
+                task_type=task.task_type.value,
+                error=str(e),
+                error_type=type(e).__name__,
+                error_count=task.error_count,
+                run_count=task.run_count,
+            )
+
+    def record_strategy_state_change(
+        self,
+        strategy_id: str,
+        from_state: StrategyState,
+        to_state: StrategyState,
+        reason: str,
+        metrics: dict[str, Any] | None = None,
+    ) -> None:
+        """Record a strategy state change (promotion/demotion)."""
+        event = PromotionEvent(
+            strategy_id=strategy_id,
+            from_state=from_state,
+            to_state=to_state,
+            timestamp=datetime.now(),
+            reason=reason,
+            metrics=metrics or {},
+        )
+        self._promotion_history.append(event)
+        self._strategy_states[strategy_id] = to_state
+
+        self._logger.info(
+            "strategy_state_changed",
+            strategy_id=strategy_id,
+            from_state=from_state.value,
+            to_state=to_state.value,
+            reason=reason,
+            metrics=metrics,
+            promotion_history_count=len(self._promotion_history),
+        )
+
+    def get_promotion_history(self, strategy_id: str | None = None) -> list[PromotionEvent]:
+        """Get promotion history, optionally filtered by strategy."""
+        if strategy_id:
+            return [e for e in self._promotion_history if e.strategy_id == strategy_id]
+        return list(self._promotion_history)
 
     def is_market_hours(self) -> bool:
         """Check if current time is within market hours."""
@@ -288,26 +420,63 @@ class AutonomousOrchestrator:
                 "last_run": task.last_run.isoformat() if task.last_run else None,
                 "time_of_day": task.time_of_day.isoformat() if task.time_of_day else None,
                 "day_of_week": task.day_of_week,
+                "run_count": task.run_count,
+                "error_count": task.error_count,
+                "last_error": task.last_error,
+                "avg_duration_ms": round(task.avg_duration_ms, 2),
             })
+
         return {
-            "running": self._running, "tasks": tasks_info, "market_hours": self.is_market_hours()
+            "running": self._running,
+            "tasks": tasks_info,
+            "market_hours": self.is_market_hours(),
+            "strategy_states": {k: v.value for k, v in self._strategy_states.items()},
+            "promotion_count": len(self._promotion_history),
         }
+
+    def log_status_summary(self) -> None:
+        """Log a comprehensive status summary."""
+        status = self.get_task_status()
+        self._logger.info(
+            "orchestrator_status_summary",
+            running=status["running"],
+            market_hours=status["market_hours"],
+            task_count=len(status["tasks"]),
+            strategy_count=len(status["strategy_states"]),
+            promotion_count=status["promotion_count"],
+            tasks=status["tasks"],
+        )
 
     async def _default_feature_refresh(self) -> None:
         """Default feature refresh handler."""
-        self._logger.debug("Default feature refresh - no-op")
+        self._logger.debug(
+            "feature_refresh_executed",
+            handler="default",
+        )
 
     async def _default_signal_generation(self) -> None:
         """Default signal generation handler."""
-        self._logger.debug("Default signal generation - no-op")
+        self._logger.debug(
+            "signal_generation_executed",
+            handler="default",
+        )
 
     async def _default_performance_eval(self) -> None:
         """Default performance evaluation handler."""
-        self._logger.debug("Default performance eval - no-op")
+        self._logger.info(
+            "performance_eval_executed",
+            handler="default",
+            strategy_count=len(self._strategy_states),
+        )
 
     async def _default_promotion_check(self) -> None:
         """Default promotion check handler."""
-        self._logger.debug("Default promotion check - no-op")
+        self._logger.info(
+            "promotion_check_executed",
+            handler="default",
+            strategy_count=len(self._strategy_states),
+            promotion_history_count=len(self._promotion_history),
+        )
 
 
 class Orchestrator:
@@ -320,14 +489,28 @@ class Orchestrator:
             is_running=False, current_phase=OrchestrationPhase.CLOSED, active_strategies=[])
         self._stop_event = asyncio.Event()
         self._http_client: httpx.AsyncClient | None = None
+        self._phase_start_time: datetime | None = None
         self._logger = logger.bind(component="orchestrator")
+
+        self._logger.info(
+            "orchestrator_initialized",
+            mode=config.mode.value,
+            market_open=config.market_open.isoformat(),
+            market_close=config.market_close.isoformat(),
+            registry_api_url=config.registry_api_url,
+        )
 
     async def start(self) -> None:
         """Start the orchestration loop."""
-        self._logger.info("Starting orchestrator", mode=self.config.mode.value)
+        self._logger.info(
+            "orchestration_starting",
+            mode=self.config.mode.value,
+        )
+
         self._state.is_running = True
         self._stop_event.clear()
         self._http_client = httpx.AsyncClient(base_url=self.config.registry_api_url, timeout=30.0)
+
         try:
             if self.config.mode == OrchestrationMode.DAILY:
                 await self._run_daily_loop()
@@ -336,13 +519,18 @@ class Orchestrator:
             elif self.config.mode == OrchestrationMode.CONTINUOUS:
                 await self._run_continuous_loop()
         except asyncio.CancelledError:
-            self._logger.info("Orchestrator cancelled")
+            self._logger.info("orchestration_cancelled")
         finally:
             await self._cleanup()
 
     async def stop(self) -> None:
         """Stop the orchestration loop gracefully."""
-        self._logger.info("Stopping orchestrator")
+        self._logger.info(
+            "orchestration_stopping",
+            current_phase=self._state.current_phase.value,
+            active_strategies=len(self._state.active_strategies),
+        )
+
         self._stop_event.set()
         self._state.is_running = False
 
@@ -360,49 +548,129 @@ class Orchestrator:
 
     async def _run_daily_loop(self) -> None:
         """Run the daily trading loop."""
-        self._logger.info("Running daily loop")
+        self._logger.info("daily_loop_started")
+
         await self._pre_market_phase()
         await self._trading_phase()
         await self._post_market_phase()
 
+        self._logger.info(
+            "daily_loop_completed",
+            total_errors=len(self._state.errors),
+        )
+
     async def _run_weekly_loop(self) -> None:
         """Run the weekly trading loop."""
-        for _ in range(5):
+        self._logger.info("weekly_loop_started")
+
+        for day in range(5):
             if self._stop_event.is_set():
+                self._logger.info(
+                    "weekly_loop_stopped_early",
+                    days_completed=day,
+                )
                 break
+
+            self._logger.info(
+                "weekly_loop_day_started",
+                day_number=day + 1,
+            )
+
             await self._run_daily_loop()
             await asyncio.sleep(1)
+
+        self._logger.info("weekly_loop_completed")
 
     async def _run_continuous_loop(self) -> None:
         """Run continuous trading loop."""
+        loop_count = 0
+        self._logger.info("continuous_loop_started")
+
         while not self._stop_event.is_set():
+            loop_count += 1
+            self._logger.debug(
+                "continuous_loop_iteration",
+                loop_count=loop_count,
+            )
+
             await self._run_daily_loop()
             await asyncio.sleep(1)
 
+        self._logger.info(
+            "continuous_loop_completed",
+            total_loops=loop_count,
+        )
+
     async def _pre_market_phase(self) -> None:
         """Execute pre-market preparation."""
-        self._logger.info("Entering pre-market phase")
+        self._phase_start_time = datetime.now()
         self._state.current_phase = OrchestrationPhase.PRE_MARKET
+
+        self._logger.info(
+            "phase_entered",
+            phase="pre_market",
+            started_at=self._phase_start_time.isoformat(),
+        )
+
         strategies = await self._load_active_strategies()
         self._state.active_strategies = [s["name"] for s in strategies]
-        self._logger.info("Loaded strategies", count=len(strategies))
+
+        self._logger.info(
+            "strategies_loaded",
+            phase="pre_market",
+            strategy_count=len(strategies),
+            strategies=self._state.active_strategies,
+        )
+
         await self._refresh_features()
+
         if self.config.pre_market_minutes > 0 and not self._stop_event.is_set():
             await asyncio.sleep(self.config.pre_market_minutes * 0.1)
 
+        phase_duration = (datetime.now() - self._phase_start_time).total_seconds()
+        self._logger.info(
+            "phase_completed",
+            phase="pre_market",
+            duration_seconds=round(phase_duration, 2),
+            strategies_ready=len(self._state.active_strategies),
+        )
+
     async def _trading_phase(self) -> None:
         """Execute main trading phase."""
-        self._logger.info("Entering trading phase")
+        self._phase_start_time = datetime.now()
         self._state.current_phase = OrchestrationPhase.TRADING
+        signal_count = 0
+
+        self._logger.info(
+            "phase_entered",
+            phase="trading",
+            started_at=self._phase_start_time.isoformat(),
+            active_strategies=len(self._state.active_strategies),
+        )
+
         while not self._stop_event.is_set() and self.is_market_open():
             try:
                 await self._generate_and_execute_signals()
+                signal_count += 1
                 self._state.last_signal_check = datetime.now()
+
                 if self._should_refresh_features():
                     await self._refresh_features()
+
+                self._logger.debug(
+                    "trading_iteration",
+                    signal_check_count=signal_count,
+                    last_signal_check=self._state.last_signal_check.isoformat(),
+                )
             except Exception as e:
-                self._logger.error("Error in trading loop", error=str(e))
+                self._logger.error(
+                    "trading_phase_error",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    signal_check_count=signal_count,
+                )
                 self._state.errors.append(f"Trading error: {e}")
+
             try:
                 await asyncio.wait_for(
                     self._stop_event.wait(), timeout=self.config.signal_check_interval_seconds)
@@ -410,13 +678,37 @@ class Orchestrator:
             except TimeoutError:
                 pass
 
+        phase_duration = (datetime.now() - self._phase_start_time).total_seconds()
+        self._logger.info(
+            "phase_completed",
+            phase="trading",
+            duration_seconds=round(phase_duration, 2),
+            signal_checks=signal_count,
+            error_count=len(self._state.errors),
+        )
+
     async def _post_market_phase(self) -> None:
         """Execute post-market evaluation."""
-        self._logger.info("Entering post-market phase")
+        self._phase_start_time = datetime.now()
         self._state.current_phase = OrchestrationPhase.POST_MARKET
+
+        self._logger.info(
+            "phase_entered",
+            phase="post_market",
+            started_at=self._phase_start_time.isoformat(),
+        )
+
         await self._evaluate_daily_performance()
+
         if self.config.post_market_minutes > 0 and not self._stop_event.is_set():
             await asyncio.sleep(self.config.post_market_minutes * 0.1)
+
+        phase_duration = (datetime.now() - self._phase_start_time).total_seconds()
+        self._logger.info(
+            "phase_completed",
+            phase="post_market",
+            duration_seconds=round(phase_duration, 2),
+        )
 
     async def _load_active_strategies(self) -> list[dict[str, Any]]:
         """Load active strategies from the registry API."""
@@ -424,39 +716,80 @@ class Orchestrator:
             if self._http_client is None:
                 self._http_client = httpx.AsyncClient(
                     base_url=self.config.registry_api_url, timeout=30.0)
+
             response = await self._http_client.get("/strategies", params={"limit": 100})
             response.raise_for_status()
             data = response.json()
             all_strategies: list[dict[str, Any]] = data.get("items", [])
             active_strategies = [s for s in all_strategies if s.get("state") in ("shadow", "paper")]
-            self._logger.debug("Loaded strategies from registry",
-                             total=len(all_strategies), active=len(active_strategies))
+
+            self._logger.info(
+                "strategies_fetched",
+                total_count=len(all_strategies),
+                active_count=len(active_strategies),
+                shadow_count=len([s for s in active_strategies if s.get("state") == "shadow"]),
+                paper_count=len([s for s in active_strategies if s.get("state") == "paper"]),
+            )
+
             return active_strategies
         except Exception as e:
-            self._logger.error("Failed to load strategies", error=str(e))
+            self._logger.error(
+                "strategy_load_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
             self._state.errors.append(f"Strategy load error: {e}")
             return []
 
     async def _refresh_features(self) -> None:
         """Refresh feature data for active strategies."""
         try:
-            self._logger.debug("Refreshing features")
+            refresh_start = datetime.now()
+
+            self._logger.debug(
+                "feature_refresh_started",
+                active_strategies=len(self._state.active_strategies),
+            )
+
             if self._http_client is None:
                 self._http_client = httpx.AsyncClient(
                     base_url=self.config.registry_api_url, timeout=30.0)
+
             self._state.last_feature_refresh = datetime.now()
-            self._logger.debug("Features refreshed", timestamp=self._state.last_feature_refresh)
+            duration_ms = (self._state.last_feature_refresh - refresh_start).total_seconds() * 1000
+
+            self._logger.info(
+                "feature_refresh_completed",
+                duration_ms=round(duration_ms, 2),
+                timestamp=self._state.last_feature_refresh.isoformat(),
+            )
         except Exception as e:
-            self._logger.error("Failed to refresh features", error=str(e))
+            self._logger.error(
+                "feature_refresh_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
             self._state.errors.append(f"Feature refresh error: {e}")
 
     async def _generate_and_execute_signals(self) -> None:
         """Generate and execute signals for all active strategies."""
-        pass
+        self._logger.debug(
+            "signal_generation_started",
+            strategy_count=len(self._state.active_strategies),
+        )
 
     async def _evaluate_daily_performance(self) -> None:
         """Evaluate end-of-day performance for all strategies."""
-        self._logger.info("Evaluating daily performance")
+        self._logger.info(
+            "performance_evaluation_started",
+            strategy_count=len(self._state.active_strategies),
+        )
+
+        # Placeholder for actual evaluation logic
+        self._logger.info(
+            "performance_evaluation_completed",
+            strategy_count=len(self._state.active_strategies),
+        )
 
     def _should_refresh_features(self) -> bool:
         """Check if features should be refreshed."""
@@ -467,11 +800,36 @@ class Orchestrator:
 
     async def _cleanup(self) -> None:
         """Clean up resources on shutdown."""
+        self._logger.info(
+            "cleanup_started",
+            phase=self._state.current_phase.value,
+            error_count=len(self._state.errors),
+        )
+
         if self._http_client is not None:
             await self._http_client.aclose()
             self._http_client = None
+
         self._state.is_running = False
-        self._logger.info("Orchestrator cleanup complete")
+        self._state.current_phase = OrchestrationPhase.CLOSED
+
+        self._logger.info(
+            "cleanup_completed",
+            total_errors=len(self._state.errors),
+        )
+
+    def log_status_summary(self) -> None:
+        """Log a comprehensive status summary."""
+        self._logger.info(
+            "orchestrator_status_summary",
+            is_running=self._state.is_running,
+            current_phase=self._state.current_phase.value,
+            active_strategies=len(self._state.active_strategies),
+            last_feature_refresh=self._state.last_feature_refresh.isoformat() if self._state.last_feature_refresh else None,
+            last_signal_check=self._state.last_signal_check.isoformat() if self._state.last_signal_check else None,
+            error_count=len(self._state.errors),
+            market_open=self.is_market_open(),
+        )
 
 
 __all__ = [
@@ -485,4 +843,6 @@ __all__ = [
     "ScheduledTask",
     "AutonomousOrchestrator",
     "OrchestratorConfig",
+    "StrategyState",
+    "PromotionEvent",
 ]

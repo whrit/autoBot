@@ -6,6 +6,8 @@ dependencies = [
     "polars>=1.0.0",
     "numpy>=2.0.0",
     "scipy>=1.11.0",
+    "structlog>=24.0.0",
+    "rich>=13.0.0",
     "cost-models",
     "risk-models",
     "common-types",

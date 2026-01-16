@@ -5,9 +5,12 @@ Builds OHLCV bars from raw trades at 1-minute, 5-minute, and 15-minute intervals
 Features: open, high, low, close, volume, returns, ATR, volatility.
 """
 
+import time
 from datetime import timedelta
+from typing import Callable
 
 import polars as pl
+import structlog
 
 # Valid granularities for standard bars
 VALID_GRANULARITIES = {"1m", "5m", "15m"}
@@ -18,6 +21,8 @@ GRANULARITY_MAP = {
     "5m": timedelta(minutes=5),
     "15m": timedelta(minutes=15),
 }
+
+logger = structlog.get_logger(__name__)
 
 
 class StandardBarBuilder:
@@ -47,23 +52,47 @@ class StandardBarBuilder:
         self.granularity = granularity
         self.interval = GRANULARITY_MAP[granularity]
         self.atr_period = atr_period
+        self._log = logger.bind(
+            builder="StandardBarBuilder",
+            granularity=granularity,
+            atr_period=atr_period,
+        )
+        self._log.info("initialized")
 
-    def build(self, trades: pl.DataFrame, symbol: str) -> pl.DataFrame:
+    def build(
+        self,
+        trades: pl.DataFrame,
+        symbol: str,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> pl.DataFrame:
         """
         Build bars from trade data.
 
         Args:
             trades: DataFrame with columns: ts_event, ts_recv, price, size, exchange, conditions.
             symbol: Stock symbol.
+            progress_callback: Optional callback for progress updates (current, total).
 
         Returns:
             DataFrame with bar data including OHLCV and derived features.
         """
+        start_time = time.perf_counter()
+        input_rows = len(trades)
+
+        self._log.info(
+            "build_started",
+            symbol=symbol,
+            input_rows=input_rows,
+        )
+
         if trades.is_empty():
+            self._log.warning("empty_input", symbol=symbol)
             return self._empty_bars_df()
 
         # Ensure timestamps are timezone-aware
         trades = self._ensure_utc(trades)
+        if progress_callback:
+            progress_callback(1, 5)
 
         # Get interval string for polars groupby_dynamic
         interval_str = self._get_interval_str()
@@ -87,6 +116,8 @@ class StandardBarBuilder:
             ])
             .rename({"ts_event": "bar_start"})
         )
+        if progress_callback:
+            progress_callback(2, 5)
 
         # Add bar_end column
         bars = bars.with_columns([
@@ -98,15 +129,21 @@ class StandardBarBuilder:
         bars = bars.with_columns([
             (pl.col("close") / pl.col("close").shift(1) - 1).alias("returns")
         ])
+        if progress_callback:
+            progress_callback(3, 5)
 
         # Calculate ATR (Average True Range)
         bars = self._calculate_atr(bars)
+        if progress_callback:
+            progress_callback(4, 5)
 
         # Calculate realized volatility
         bars = self._calculate_realized_vol(bars)
+        if progress_callback:
+            progress_callback(5, 5)
 
         # Reorder columns to match schema
-        return bars.select([
+        result = bars.select([
             "symbol",
             "bar_start",
             "bar_end",
@@ -119,6 +156,21 @@ class StandardBarBuilder:
             "atr",
             "realized_vol",
         ])
+
+        elapsed = time.perf_counter() - start_time
+        output_bars = len(result)
+        throughput = input_rows / elapsed if elapsed > 0 else 0
+
+        self._log.info(
+            "build_completed",
+            symbol=symbol,
+            input_rows=input_rows,
+            output_bars=output_bars,
+            processing_time_sec=round(elapsed, 3),
+            throughput_rows_per_sec=round(throughput, 1),
+        )
+
+        return result
 
     def _ensure_utc(self, df: pl.DataFrame) -> pl.DataFrame:
         """Ensure timestamps are UTC timezone-aware."""

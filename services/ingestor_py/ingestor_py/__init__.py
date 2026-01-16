@@ -9,7 +9,7 @@ This service handles:
 - Symbol universe management
 """
 
-from ingestor_py.backfill import BackfillOrchestrator
+from ingestor_py.backfill import BackfillOrchestrator, BackfillStats, SymbolStats
 from ingestor_py.client import AlpacaDataClient
 from ingestor_py.streaming import RealtimeStreamer
 from ingestor_py.universe import (
@@ -24,6 +24,8 @@ __all__ = [
     "AlpacaDataClient",
     "ParquetWriter",
     "BackfillOrchestrator",
+    "BackfillStats",
+    "SymbolStats",
     "RealtimeStreamer",
     "UniverseManager",
     "Symbol",

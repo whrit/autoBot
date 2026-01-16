@@ -5,9 +5,13 @@ Builds high-frequency microstructure features at 5s, 15s, and 30s intervals.
 Features: spread, midprice, microprice, quote_imbalance, trade_imbalance, realized_vol.
 """
 
+import sys
+import time
 from datetime import timedelta
+from typing import Callable
 
 import polars as pl
+import structlog
 
 # Valid granularities for microstructure bars
 VALID_GRANULARITIES = {"5s", "15s", "30s"}
@@ -18,6 +22,21 @@ GRANULARITY_MAP = {
     "15s": timedelta(seconds=15),
     "30s": timedelta(seconds=30),
 }
+
+logger = structlog.get_logger(__name__)
+
+
+def get_memory_usage_mb() -> float:
+    """Get current process memory usage in MB."""
+    try:
+        import resource
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        # maxrss is in KB on Linux, bytes on macOS
+        if sys.platform == "darwin":
+            return usage.ru_maxrss / (1024 * 1024)
+        return usage.ru_maxrss / 1024
+    except Exception:
+        return 0.0
 
 
 class MicrostructureBarBuilder:
@@ -51,12 +70,18 @@ class MicrostructureBarBuilder:
             )
         self.granularity = granularity
         self.interval = GRANULARITY_MAP[granularity]
+        self._log = logger.bind(
+            builder="MicrostructureBarBuilder",
+            granularity=granularity,
+        )
+        self._log.info("initialized")
 
     def build(
         self,
         trades: pl.DataFrame,
         quotes: pl.DataFrame,
         symbol: str,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> pl.DataFrame:
         """
         Build microstructure bars from trade and quote data.
@@ -65,25 +90,49 @@ class MicrostructureBarBuilder:
             trades: DataFrame with trade data.
             quotes: DataFrame with quote data.
             symbol: Stock symbol.
+            progress_callback: Optional callback for progress updates (current, total).
 
         Returns:
             DataFrame with microstructure bar data.
         """
+        start_time = time.perf_counter()
+        start_memory = get_memory_usage_mb()
+        trade_rows = len(trades)
+        quote_rows = len(quotes)
+        total_input_rows = trade_rows + quote_rows
+
+        self._log.info(
+            "build_started",
+            symbol=symbol,
+            trade_rows=trade_rows,
+            quote_rows=quote_rows,
+            timeframe=self.granularity,
+        )
+
         if trades.is_empty() and quotes.is_empty():
+            self._log.warning("empty_input", symbol=symbol)
             return self._empty_micro_bars_df()
 
         # Ensure timestamps are timezone-aware
         trades = self._ensure_utc(trades, "ts_event")
         quotes = self._ensure_utc(quotes, "ts_event")
+        if progress_callback:
+            progress_callback(1, 4)
 
         # Get interval string for polars
         interval_str = self._get_interval_str()
 
         # Compute quote-based features
+        self._log.debug("building_quote_bars", quote_rows=quote_rows)
         quote_bars = self._build_quote_bars(quotes, interval_str)
+        if progress_callback:
+            progress_callback(2, 4)
 
         # Compute trade-based features
+        self._log.debug("building_trade_bars", trade_rows=trade_rows)
         trade_bars = self._build_trade_bars(trades, interval_str)
+        if progress_callback:
+            progress_callback(3, 4)
 
         # Join quote and trade bars
         if quote_bars.is_empty():
@@ -116,9 +165,11 @@ class MicrostructureBarBuilder:
             pl.col("realized_vol").fill_null(0.0),
             pl.col("trade_imbalance").fill_null(0.0),
         ])
+        if progress_callback:
+            progress_callback(4, 4)
 
         # Reorder columns to match schema
-        return bars.select([
+        result = bars.select([
             "symbol",
             "bar_start",
             "bar_end",
@@ -133,6 +184,34 @@ class MicrostructureBarBuilder:
             "trade_volume",
             "realized_vol",
         ])
+
+        elapsed = time.perf_counter() - start_time
+        end_memory = get_memory_usage_mb()
+        output_bars = len(result)
+        throughput = total_input_rows / elapsed if elapsed > 0 else 0
+
+        features_computed = [
+            "vwap", "midprice", "microprice", "spread",
+            "bid_size", "ask_size", "quote_imbalance",
+            "trade_imbalance", "trade_volume", "realized_vol",
+        ]
+
+        self._log.info(
+            "build_completed",
+            symbol=symbol,
+            timeframe=self.granularity,
+            trade_rows=trade_rows,
+            quote_rows=quote_rows,
+            output_bars=output_bars,
+            features_computed=len(features_computed),
+            processing_time_sec=round(elapsed, 3),
+            throughput_rows_per_sec=round(throughput, 1),
+            memory_start_mb=round(start_memory, 2),
+            memory_end_mb=round(end_memory, 2),
+            memory_delta_mb=round(end_memory - start_memory, 2),
+        )
+
+        return result
 
     def _build_quote_bars(
         self, quotes: pl.DataFrame, interval_str: str

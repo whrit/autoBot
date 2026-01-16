@@ -13,6 +13,7 @@ from feature_builder_py.bars import StandardBarBuilder
 from feature_builder_py.decision_frame import DecisionFrameBuilder
 from feature_builder_py.incremental import IncrementalProcessor
 from feature_builder_py.joins import AsOfJoiner
+from feature_builder_py.main import FeatureBuilderCLI, main
 from feature_builder_py.micro_bars import MicrostructureBarBuilder
 
 __all__ = [
@@ -21,4 +22,6 @@ __all__ = [
     "AsOfJoiner",
     "DecisionFrameBuilder",
     "IncrementalProcessor",
+    "FeatureBuilderCLI",
+    "main",
 ]

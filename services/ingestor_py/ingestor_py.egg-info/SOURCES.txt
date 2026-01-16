@@ -4,6 +4,7 @@ ingestor_py/backfill.py
 ingestor_py/client.py
 ingestor_py/main.py
 ingestor_py/streaming.py
+ingestor_py/universe.py
 ingestor_py/writer.py
 ingestor_py.egg-info/PKG-INFO
 ingestor_py.egg-info/SOURCES.txt
@@ -11,3 +12,4 @@ ingestor_py.egg-info/dependency_links.txt
 ingestor_py.egg-info/requires.txt
 ingestor_py.egg-info/top_level.txt
 tests/test_ingestor.py
+tests/test_universe.py

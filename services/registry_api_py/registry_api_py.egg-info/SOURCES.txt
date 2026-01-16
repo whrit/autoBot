@@ -8,6 +8,7 @@ registry_api_py/database.py
 registry_api_py/gates.py
 registry_api_py/models.py
 registry_api_py/promotions.py
+registry_api_py/routes_promotion.py
 registry_api_py/schemas.py
 registry_api_py.egg-info/PKG-INFO
 registry_api_py.egg-info/SOURCES.txt
@@ -17,6 +18,9 @@ registry_api_py.egg-info/top_level.txt
 tests/test_api_endpoints.py
 tests/test_artifacts.py
 tests/test_audit.py
+tests/test_audit_endpoints.py
 tests/test_crud.py
 tests/test_gates.py
+tests/test_gpu_metadata.py
+tests/test_promotion_endpoints.py
 tests/test_promotions.py

@@ -286,7 +286,7 @@ mkdir -p lake
 
 # Run historical backfill for the last 7 days
 INGESTOR_MODE=backfill \
-BACKFILL_DAYS=7 \
+BACKFILL_DAYS=90 \
 SYMBOLS=SPY,QQQ \
 LAKE_PATH=./lake \
 ALPACA_API_KEY=$ALPACA_API_KEY \

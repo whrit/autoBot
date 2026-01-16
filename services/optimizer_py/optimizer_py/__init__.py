@@ -26,6 +26,12 @@ from optimizer_py.gpu_support import (
     TrainingDevice,
     get_cuda_info,
 )
+from optimizer_py.logging_config import (
+    configure_logging,
+    console,
+    get_logger,
+    get_tracker,
+)
 from optimizer_py.mean_reversion import MeanReversionStrategy
 from optimizer_py.ml_strategy import (
     MLStrategyConfig,
@@ -100,6 +106,11 @@ __all__ = [
     "CostSensitivityConfig",
     "CostSensitivityTester",
     "SensitivityResult",
+    # Logging
+    "configure_logging",
+    "console",
+    "get_logger",
+    "get_tracker",
 ]
 
 __version__ = "0.1.0"

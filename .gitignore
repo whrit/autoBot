@@ -9,3 +9,4 @@ __pycache__/
 uv.lock
 .env
 .DS_Store
+*.egg-info

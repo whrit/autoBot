@@ -57,6 +57,7 @@ members = [
   "libs/common_types",
   "libs/cost_models",
   "libs/risk_models",
+  "libs/logging_utils",
 ]
 
 [tool.ruff]
@@ -68,7 +69,7 @@ extend-select = ["I", "UP", "B", "SIM", "RUF"]
 ignore = ["RUF002", "RUF003"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["common_types", "cost_models", "risk_models"]
+known-first-party = ["common_types", "cost_models", "risk_models", "logging_utils"]
 
 [tool.mypy]
 python_version = "3.12"

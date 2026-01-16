@@ -9,9 +9,12 @@ This package provides monitoring capabilities for:
 - Fill rate monitoring
 - Turnover analysis
 - Shadow vs backtest behavior comparison
+- Real-time Rich dashboard display
 """
 
 from monitor_py.behavior_comparison import (
+    BehaviorAlert,
+    BehaviorAlertSeverity,
     BehaviorComparator,
     BehaviorConfig,
     BehaviorStats,
@@ -26,6 +29,8 @@ from monitor_py.feed_health import (
     FeedStatus,
 )
 from monitor_py.fill_rate import (
+    AlertSeverity,
+    FillAlert,
     FillEvent,
     FillRateConfig,
     FillRateStats,
@@ -33,9 +38,18 @@ from monitor_py.fill_rate import (
 )
 from monitor_py.metrics import MetricsExporter
 from monitor_py.rollback import RollbackAction, RollbackConfig, RollbackManager
-from monitor_py.slippage import SlippageConfig, SlippageStats, SlippageTracker
+from monitor_py.slippage import (
+    SlippageAlert,
+    SlippageAlertSeverity,
+    SlippageConfig,
+    SlippageEvent,
+    SlippageStats,
+    SlippageTracker,
+)
 from monitor_py.turnover import (
     TradeRecord,
+    TurnoverAlert,
+    TurnoverAlertSeverity,
     TurnoverAnalyzer,
     TurnoverConfig,
     TurnoverStats,
@@ -51,6 +65,9 @@ __all__ = [
     "SlippageConfig",
     "SlippageStats",
     "SlippageTracker",
+    "SlippageEvent",
+    "SlippageAlert",
+    "SlippageAlertSeverity",
     # Drawdown
     "DrawdownConfig",
     "DrawdownMonitor",
@@ -66,17 +83,23 @@ __all__ = [
     "FillRateStats",
     "FillRateTracker",
     "FillEvent",
+    "FillAlert",
+    "AlertSeverity",
     # Turnover
     "TurnoverConfig",
     "TurnoverStats",
     "TurnoverAnalyzer",
     "TradeRecord",
+    "TurnoverAlert",
+    "TurnoverAlertSeverity",
     # Behavior Comparison
     "BehaviorConfig",
     "BehaviorStats",
     "BehaviorComparator",
     "SignalRecord",
     "ExecutionRecord",
+    "BehaviorAlert",
+    "BehaviorAlertSeverity",
 ]
 
 __version__ = "0.1.0"

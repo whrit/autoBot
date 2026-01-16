@@ -15,19 +15,34 @@ from runner_py.acceptance import AcceptanceCriteria, AcceptanceResult, Acceptanc
 from runner_py.benchmark import BenchmarkConfig, BenchmarkResult, PerformanceBenchmark
 
 # Fill streaming (T6.04)
-from runner_py.fill_stream import FillConfirmationStream, FillStreamConfig
+from runner_py.fill_stream import (
+    ConnectionStats,
+    FillConfirmationStream,
+    FillStreamConfig,
+    LatencyStats,
+)
 
 # Orchestrator (T6.05)
 from runner_py.orchestrator import (
+    AutonomousOrchestrator,
     OrchestrationConfig,
     OrchestrationMode,
     OrchestrationPhase,
     OrchestrationState,
     Orchestrator,
+    OrchestratorConfig,
+    PromotionEvent,
+    ScheduledTask,
+    ScheduleFrequency,
+    StrategyState,
+    TaskType,
 )
 
+# Dashboard (main.py)
+from runner_py.main import DashboardState, RunnerDashboard
+
 # Paper execution (T6.03)
-from runner_py.paper import PaperConfig, PaperExecutor, PaperFill
+from runner_py.paper import PaperConfig, PaperExecutor, PaperFill, PnLTracker
 
 # Promotion Manager (T6.06)
 from runner_py.promotion import (
@@ -40,7 +55,7 @@ from runner_py.promotion import (
 )
 
 # Shadow Execution (T6.01) and Signal Logging (T6.02)
-from runner_py.shadow import ShadowConfig, ShadowExecutor
+from runner_py.shadow import ShadowConfig, ShadowExecutor, SignalSummary
 from runner_py.signal_log import SignalLogConfig, SignalLogger
 
 # Slippage Analysis (T6.08)
@@ -78,6 +93,7 @@ __all__ = [
     # Shadow Execution (T6.01)
     "ShadowConfig",
     "ShadowExecutor",
+    "SignalSummary",
     # Signal Logging (T6.02)
     "SignalLogConfig",
     "SignalLogger",
@@ -85,15 +101,28 @@ __all__ = [
     "PaperConfig",
     "PaperExecutor",
     "PaperFill",
+    "PnLTracker",
     # Fill Streaming (T6.04)
+    "ConnectionStats",
     "FillConfirmationStream",
     "FillStreamConfig",
+    "LatencyStats",
     # Orchestrator (T6.05)
+    "AutonomousOrchestrator",
     "Orchestrator",
+    "OrchestratorConfig",
     "OrchestrationConfig",
     "OrchestrationMode",
     "OrchestrationPhase",
     "OrchestrationState",
+    "PromotionEvent",
+    "ScheduledTask",
+    "ScheduleFrequency",
+    "StrategyState",
+    "TaskType",
+    # Dashboard
+    "DashboardState",
+    "RunnerDashboard",
     # Promotion Manager (T6.06)
     "AutoPromoter",
     "PromotionCriteria",

@@ -5,12 +5,17 @@ Combines multi-timeframe features into a single decision matrix.
 Each row = one decision point with all available features.
 """
 
+import time
 from pathlib import Path
+from typing import Callable
 
 import polars as pl
 import pyarrow.parquet as pq
+import structlog
 
 from feature_builder_py.joins import AsOfJoiner
+
+logger = structlog.get_logger(__name__)
 
 
 def get_schema_version(source: pl.DataFrame | Path | str) -> str:
@@ -86,6 +91,11 @@ class DecisionFrameBuilder:
         """
         self.schema_version = schema_version
         self.joiner = AsOfJoiner()
+        self._log = logger.bind(
+            builder="DecisionFrameBuilder",
+            schema_version=schema_version,
+        )
+        self._log.info("initialized")
 
     def build(
         self,
@@ -95,6 +105,7 @@ class DecisionFrameBuilder:
         bars_5m: pl.DataFrame,
         bars_15m: pl.DataFrame | None = None,
         symbol: str = "",
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> pl.DataFrame:
         """
         Build a decision frame from multiple timeframe features.
@@ -106,11 +117,27 @@ class DecisionFrameBuilder:
             bars_5m: 5-minute OHLCV bars.
             bars_15m: 15-minute OHLCV bars (optional).
             symbol: Stock symbol.
+            progress_callback: Optional callback for progress updates (current, total).
 
         Returns:
             DataFrame with all features for each decision point.
         """
+        start_time = time.perf_counter()
+        input_decision_rows = len(decision_times)
+
+        self._log.info(
+            "build_started",
+            symbol=symbol,
+            schema_version=self.schema_version,
+            decision_times_rows=input_decision_rows,
+            micro_bars_30s_rows=len(micro_bars_30s),
+            bars_1m_rows=len(bars_1m),
+            bars_5m_rows=len(bars_5m),
+            bars_15m_rows=len(bars_15m) if bars_15m is not None else 0,
+        )
+
         if decision_times.is_empty():
+            self._log.warning("empty_decision_times", symbol=symbol)
             return self._empty_decision_frame()
 
         # Start with decision times
@@ -120,16 +147,52 @@ class DecisionFrameBuilder:
         frame = frame.with_columns(pl.lit(symbol).alias("symbol"))
 
         # Join 30s micro features
+        frame_before = len(frame)
         frame = self._join_micro_features(frame, micro_bars_30s)
+        self._log.debug(
+            "joined_micro_features",
+            rows_before=frame_before,
+            rows_after=len(frame),
+            micro_bars_rows=len(micro_bars_30s),
+        )
+        if progress_callback:
+            progress_callback(1, 5)
 
         # Join 1m features
+        frame_before = len(frame)
         frame = self._join_1m_features(frame, bars_1m)
+        self._log.debug(
+            "joined_1m_features",
+            rows_before=frame_before,
+            rows_after=len(frame),
+            bars_1m_rows=len(bars_1m),
+        )
+        if progress_callback:
+            progress_callback(2, 5)
 
         # Join 5m features
+        frame_before = len(frame)
         frame = self._join_5m_features(frame, bars_5m)
+        self._log.debug(
+            "joined_5m_features",
+            rows_before=frame_before,
+            rows_after=len(frame),
+            bars_5m_rows=len(bars_5m),
+        )
+        if progress_callback:
+            progress_callback(3, 5)
 
         # Join 15m features (optional)
+        frame_before = len(frame)
         frame = self._join_15m_features(frame, bars_15m)
+        self._log.debug(
+            "joined_15m_features",
+            rows_before=frame_before,
+            rows_after=len(frame),
+            bars_15m_rows=len(bars_15m) if bars_15m is not None else 0,
+        )
+        if progress_callback:
+            progress_callback(4, 5)
 
         # Ensure all expected columns exist
         frame = self._ensure_columns(frame)
@@ -140,7 +203,33 @@ class DecisionFrameBuilder:
         )
 
         # Reorder columns to match schema
-        return self._reorder_columns(frame)
+        result = self._reorder_columns(frame)
+        if progress_callback:
+            progress_callback(5, 5)
+
+        elapsed = time.perf_counter() - start_time
+        output_frames = len(result)
+
+        # Compute output statistics
+        null_counts = {}
+        for col in result.columns:
+            if col not in ("symbol", "decision_ts", "schema_version"):
+                null_count = result[col].null_count()
+                if null_count > 0:
+                    null_counts[col] = null_count
+
+        self._log.info(
+            "build_completed",
+            symbol=symbol,
+            schema_version=self.schema_version,
+            input_decision_rows=input_decision_rows,
+            output_frames=output_frames,
+            processing_time_sec=round(elapsed, 3),
+            null_counts=null_counts if null_counts else None,
+            output_columns=len(result.columns),
+        )
+
+        return result
 
     def _join_micro_features(
         self, frame: pl.DataFrame, micro_bars: pl.DataFrame
@@ -323,6 +412,13 @@ class DecisionFrameBuilder:
 
         path = Path(path)
 
+        self._log.info(
+            "writing_parquet",
+            path=str(path),
+            rows=len(frame),
+            schema_version=self.schema_version,
+        )
+
         # Convert to Arrow table
         table = frame.to_arrow()
 
@@ -336,6 +432,12 @@ class DecisionFrameBuilder:
 
         # Write to Parquet
         pq.write_table(table, path)
+
+        self._log.info(
+            "parquet_written",
+            path=str(path),
+            rows=len(frame),
+        )
 
     def _empty_decision_frame(self) -> pl.DataFrame:
         """Return an empty DataFrame with correct schema."""

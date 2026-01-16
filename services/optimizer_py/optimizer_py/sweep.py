@@ -8,6 +8,12 @@ Key Components:
     - SweepResult: Results from parameter sweep optimization
     - ParameterSweep: Main class for running parameter optimization
 
+Features:
+    - Comprehensive logging of parameter combinations tested
+    - Rich progress bars for optimization progress
+    - Real-time best result tracking
+    - Memory-efficient result storage
+
 Example:
     >>> config = SweepConfig(
     ...     strategy_family="trend",
@@ -24,13 +30,34 @@ from __future__ import annotations
 
 import itertools
 import random
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 import polars as pl
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
+from rich.table import Table
 
+from optimizer_py.logging_config import (
+    OptimizationTracker,
+    get_logger,
+    get_tracker,
+    reset_tracker,
+)
 from optimizer_py.strategies import StrategyFamily, StrategySignal
+
+# Module-level logger
+logger = get_logger("optimizer.sweep")
 
 
 @dataclass
@@ -69,6 +96,75 @@ class SweepResult:
     best_score: float
     all_results: list[dict[str, Any]] = field(default_factory=list)
     cv_scores: list[float] = field(default_factory=list)
+
+    def leaderboard_table(
+        self,
+        top_n: int = 10,
+        console: Console | None = None,
+    ) -> Table:
+        """
+        Generate a Rich table showing top parameter combinations.
+
+        Args:
+            top_n: Number of top results to show
+            console: Optional Rich console
+
+        Returns:
+            Rich Table with leaderboard
+        """
+        table = Table(
+            title=f"Top {top_n} Parameter Combinations",
+            show_header=True,
+            header_style="bold magenta",
+        )
+
+        # Add columns
+        table.add_column("Rank", justify="center", style="dim")
+        table.add_column("Score", justify="right")
+
+        # Determine parameter columns from best params
+        param_names = list(self.best_params.keys()) if self.best_params else []
+        for name in param_names:
+            table.add_column(name, justify="right")
+
+        # Sort and take top N
+        sorted_results = sorted(
+            self.all_results,
+            key=lambda x: x.get("score", 0),
+            reverse=True,
+        )[:top_n]
+
+        for idx, result in enumerate(sorted_results):
+            row = [str(idx + 1), f"{result.get('score', 0):.4f}"]
+
+            params = result.get("params", {})
+            for name in param_names:
+                value = params.get(name, "-")
+                if isinstance(value, float):
+                    row.append(f"{value:.4f}")
+                else:
+                    row.append(str(value))
+
+            # Highlight best result
+            style = "bold green" if idx == 0 else None
+            table.add_row(*row, style=style)
+
+        return table
+
+    def summary_stats(self) -> dict[str, float]:
+        """Get summary statistics for all results."""
+        scores = [r.get("score", 0) for r in self.all_results]
+        if not scores:
+            return {"count": 0}
+
+        return {
+            "count": len(scores),
+            "best": max(scores),
+            "worst": min(scores),
+            "mean": float(np.mean(scores)),
+            "std": float(np.std(scores)),
+            "median": float(np.median(scores)),
+        }
 
 
 def generate_parameter_combinations(
@@ -109,6 +205,12 @@ class ParameterSweep[T: StrategyFamily]:
     Provides grid search and random search for finding optimal
     strategy parameters based on backtested performance metrics.
 
+    Features:
+        - Rich progress bars during optimization
+        - Real-time leaderboard tracking
+        - Comprehensive logging of all combinations tested
+        - Memory-efficient result storage
+
     Example:
         >>> sweep = ParameterSweep(strategy_class=TrendStrategy, config=config)
         >>> result = sweep.grid_search(decision_frame)
@@ -119,6 +221,8 @@ class ParameterSweep[T: StrategyFamily]:
         self,
         strategy_class: type[T],
         config: SweepConfig,
+        console: Console | None = None,
+        enable_logging: bool = True,
     ) -> None:
         """
         Initialize parameter sweep.
@@ -126,27 +230,71 @@ class ParameterSweep[T: StrategyFamily]:
         Args:
             strategy_class: Strategy class to instantiate with parameters
             config: Sweep configuration
+            console: Optional Rich console for progress display
+            enable_logging: Whether to enable structured logging
         """
         self.strategy_class = strategy_class
         self.config = config
+        self.console = console or Console()
+        self._enable_logging = enable_logging
+        self._tracker: OptimizationTracker | None = None
 
-    def grid_search(self, decision_frame: pl.DataFrame) -> SweepResult:
+        if enable_logging:
+            reset_tracker()
+            self._tracker = get_tracker()
+            logger.info(
+                "parameter_sweep_initialized",
+                strategy_family=config.strategy_family,
+                metric=config.metric,
+                n_splits=config.n_splits,
+                total_combinations=self._count_combinations(),
+            )
+
+    def _count_combinations(self) -> int:
+        """Count total parameter combinations."""
+        if not self.config.parameter_grid:
+            return 0
+        total = 1
+        for values in self.config.parameter_grid.values():
+            total *= len(values)
+        return total
+
+    def grid_search(
+        self,
+        decision_frame: pl.DataFrame,
+        show_progress: bool = True,
+    ) -> SweepResult:
         """
         Perform exhaustive grid search over all parameter combinations.
 
         Args:
             decision_frame: Market data for backtesting strategies
+            show_progress: Whether to display Rich progress bar
 
         Returns:
             SweepResult with best parameters and all results
         """
         combinations = generate_parameter_combinations(self.config.parameter_grid)
-        return self._evaluate_combinations(decision_frame, combinations)
+
+        if self._enable_logging:
+            logger.info(
+                "grid_search_started",
+                total_combinations=len(combinations),
+                parameter_grid=str(self.config.parameter_grid),
+            )
+
+        return self._evaluate_combinations(
+            decision_frame,
+            combinations,
+            show_progress=show_progress,
+            search_type="grid",
+        )
 
     def random_search(
         self,
         decision_frame: pl.DataFrame,
         n_iter: int,
+        show_progress: bool = True,
     ) -> SweepResult:
         """
         Perform random search over parameter space.
@@ -154,6 +302,7 @@ class ParameterSweep[T: StrategyFamily]:
         Args:
             decision_frame: Market data for backtesting strategies
             n_iter: Number of random parameter combinations to try
+            show_progress: Whether to display Rich progress bar
 
         Returns:
             SweepResult with best parameters and all results
@@ -166,12 +315,27 @@ class ParameterSweep[T: StrategyFamily]:
         else:
             combinations = random.sample(all_combinations, n_iter)
 
-        return self._evaluate_combinations(decision_frame, combinations)
+        if self._enable_logging:
+            logger.info(
+                "random_search_started",
+                n_iter=n_iter,
+                total_possible=len(all_combinations),
+                sampled=len(combinations),
+            )
+
+        return self._evaluate_combinations(
+            decision_frame,
+            combinations,
+            show_progress=show_progress,
+            search_type="random",
+        )
 
     def _evaluate_combinations(
         self,
         decision_frame: pl.DataFrame,
         combinations: list[dict[str, Any]],
+        show_progress: bool = True,
+        search_type: str = "grid",
     ) -> SweepResult:
         """
         Evaluate a list of parameter combinations.
@@ -179,21 +343,99 @@ class ParameterSweep[T: StrategyFamily]:
         Args:
             decision_frame: Market data for backtesting
             combinations: List of parameter dictionaries to evaluate
+            show_progress: Whether to display progress bar
+            search_type: Type of search being performed
 
         Returns:
             SweepResult with all evaluations and best result
         """
         results: list[dict[str, Any]] = []
+        best_score = float("-inf")
+        best_params: dict[str, Any] = {}
 
-        for params in combinations:
-            cv_scores = self._cross_validate(decision_frame, params)
-            mean_score = float(np.mean(cv_scores)) if cv_scores else 0.0
+        if show_progress:
+            progress = Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(complete_style="cyan", finished_style="green"),
+                TaskProgressColumn(),
+                TextColumn("[magenta]Best: {task.fields[best]:.4f}[/magenta]"),
+                TimeElapsedColumn(),
+                TimeRemainingColumn(),
+                console=self.console,
+            )
 
-            results.append({
-                "params": params,
-                "score": mean_score,
-                "cv_scores": cv_scores,
-            })
+            with progress:
+                task = progress.add_task(
+                    f"{search_type.title()} Search [0/{len(combinations)}]",
+                    total=len(combinations),
+                    best=0.0,
+                )
+
+                for idx, params in enumerate(combinations):
+                    cv_scores = self._cross_validate(decision_frame, params)
+                    mean_score = float(np.mean(cv_scores)) if cv_scores else 0.0
+
+                    is_best = mean_score > best_score
+                    if is_best:
+                        best_score = mean_score
+                        best_params = params.copy()
+
+                    results.append({
+                        "params": params,
+                        "score": mean_score,
+                        "cv_scores": cv_scores,
+                    })
+
+                    # Track in optimization tracker
+                    if self._tracker is not None:
+                        self._tracker.record_result(params, mean_score)
+
+                    # Log individual evaluation at debug level
+                    if self._enable_logging:
+                        logger.debug(
+                            "combination_evaluated",
+                            index=idx + 1,
+                            params=str(params),
+                            score=mean_score,
+                            is_new_best=is_best,
+                        )
+
+                    # Update progress bar
+                    progress.update(
+                        task,
+                        advance=1,
+                        description=f"{search_type.title()} [{idx + 1}/{len(combinations)}]",
+                        best=best_score,
+                    )
+        else:
+            # No progress bar
+            for idx, params in enumerate(combinations):
+                cv_scores = self._cross_validate(decision_frame, params)
+                mean_score = float(np.mean(cv_scores)) if cv_scores else 0.0
+
+                is_best = mean_score > best_score
+                if is_best:
+                    best_score = mean_score
+                    best_params = params.copy()
+
+                results.append({
+                    "params": params,
+                    "score": mean_score,
+                    "cv_scores": cv_scores,
+                })
+
+                if self._tracker is not None:
+                    self._tracker.record_result(params, mean_score)
+
+                if self._enable_logging:
+                    logger.debug(
+                        "combination_evaluated",
+                        index=idx + 1,
+                        params=str(params),
+                        score=mean_score,
+                        is_new_best=is_best,
+                    )
 
         # Sort by score descending
         results.sort(key=lambda x: x["score"], reverse=True)
@@ -207,6 +449,19 @@ class ParameterSweep[T: StrategyFamily]:
             )
 
         best = results[0]
+
+        # Log completion
+        if self._enable_logging:
+            tracker_summary = self._tracker.get_summary() if self._tracker else {}
+            logger.info(
+                "sweep_completed",
+                search_type=search_type,
+                total_evaluated=len(combinations),
+                best_score=best["score"],
+                best_params=str(best["params"]),
+                **tracker_summary,
+            )
+
         return SweepResult(
             best_params=best["params"],
             best_score=best["score"],

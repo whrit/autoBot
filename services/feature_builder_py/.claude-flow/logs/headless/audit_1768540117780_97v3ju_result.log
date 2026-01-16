@@ -1,0 +1,13 @@
+[2026-01-16T05:13:37.868Z] RESULT
+============================================================
+{
+  "success": false,
+  "output": "",
+  "durationMs": 300088,
+  "model": "haiku",
+  "sandboxMode": "strict",
+  "workerType": "audit",
+  "timestamp": "2026-01-16T05:13:37.868Z",
+  "executionId": "audit_1768540117780_97v3ju",
+  "error": "Process exited with code 143"
+}

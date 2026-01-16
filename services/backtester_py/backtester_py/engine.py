@@ -3,6 +3,12 @@ Backtester Core Engine (T3.01-T3.04).
 
 Provides the core simulation loop with quote-based fills, slippage modeling,
 and position/risk management.
+
+Includes comprehensive structured logging for:
+- Simulation progress tracking
+- Trade execution details
+- Fill prices and slippage
+- Memory-efficient logging for large backtests
 """
 
 from __future__ import annotations
@@ -10,13 +16,24 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
+from backtester_py.logging_config import (
+    TradeLogBuffer,
+    get_logger,
+    get_trade_buffer,
+    reset_trade_buffer,
+)
+
 if TYPE_CHECKING:
     from cost_models import TransactionCostModel
     from risk_models import RiskChecker, RiskState
+
+# Module-level logger
+logger = get_logger("backtester.engine")
 
 
 class SignalType(str, Enum):
@@ -175,14 +192,24 @@ class BacktestEngine:
     - Sells at bid price - slippage
     - Respects position limits via RiskChecker
     - Applies stop-loss/take-profit logic
+
+    Includes comprehensive logging for simulation progress,
+    trade execution, and performance metrics.
     """
 
-    def __init__(self, config: BacktestConfig) -> None:
+    def __init__(
+        self,
+        config: BacktestConfig,
+        enable_logging: bool = True,
+        log_every_n_signals: int = 100,
+    ) -> None:
         """
         Initialize the backtest engine.
 
         Args:
             config: Backtest configuration
+            enable_logging: Whether to log simulation progress
+            log_every_n_signals: Log progress every N signals processed
         """
         self.config = config
         self._positions: dict[str, Position] = {}
@@ -191,10 +218,27 @@ class BacktestEngine:
         self._equity_history: list[dict[str, datetime | float]] = []
         self._risk_violations: list[str] = []
 
+        # Logging configuration
+        self._enable_logging = enable_logging
+        self._log_every_n = log_every_n_signals
+        self._signals_processed = 0
+        self._trade_buffer: TradeLogBuffer | None = None
+
+        if enable_logging:
+            reset_trade_buffer()
+            self._trade_buffer = get_trade_buffer()
+            logger.info(
+                "backtest_engine_initialized",
+                initial_capital=config.initial_capital,
+                stop_loss_pct=config.stop_loss_pct,
+                default_order_notional=config.default_order_notional,
+            )
+
     def run(
         self,
         market_data: pl.DataFrame,
         signals: list[Signal],
+        progress_callback: Callable[[int, int, dict[str, float]], None] | None = None,
     ) -> BacktestResult:
         """
         Run backtest simulation.
@@ -209,6 +253,8 @@ class BacktestEngine:
                 - ask_size: float (optional)
                 - vol: float (optional, short-term volatility)
             signals: List of trading signals to execute
+            progress_callback: Optional callback for progress updates.
+                Receives (current, total, metrics_dict)
 
         Returns:
             BacktestResult with fills, positions, and metrics
@@ -219,16 +265,77 @@ class BacktestEngine:
         self._fills = []
         self._equity_history = []
         self._risk_violations = []
+        self._signals_processed = 0
+
+        if self._enable_logging:
+            reset_trade_buffer()
+            self._trade_buffer = get_trade_buffer()
+            logger.info(
+                "backtest_started",
+                total_signals=len(signals),
+                market_data_rows=len(market_data),
+            )
 
         # Sort signals by timestamp
         sorted_signals = sorted(signals, key=lambda s: s.timestamp)
+        total_signals = len(sorted_signals)
 
         # Process each signal
-        for signal in sorted_signals:
+        for idx, signal in enumerate(sorted_signals):
             self._process_signal(signal, market_data)
+            self._signals_processed += 1
+
+            # Log progress periodically
+            if self._enable_logging and self._signals_processed % self._log_every_n == 0:
+                current_pnl = sum(
+                    p.realized_pnl + p.unrealized_pnl for p in self._positions.values()
+                )
+                logger.debug(
+                    "simulation_progress",
+                    signals_processed=self._signals_processed,
+                    total_signals=total_signals,
+                    trades_executed=len(self._fills),
+                    current_pnl=current_pnl,
+                )
+
+            # Call progress callback if provided
+            if progress_callback is not None and idx % max(1, total_signals // 100) == 0:
+                metrics = self._get_current_metrics()
+                progress_callback(idx + 1, total_signals, metrics)
+
+        # Log completion
+        if self._enable_logging:
+            trade_summary = (
+                self._trade_buffer.get_summary() if self._trade_buffer else {}
+            )
+            logger.info(
+                "backtest_completed",
+                total_signals=total_signals,
+                total_trades=len(self._fills),
+                total_pnl=sum(
+                    p.realized_pnl + p.unrealized_pnl for p in self._positions.values()
+                ),
+                risk_violations=len(self._risk_violations),
+                **trade_summary,
+            )
 
         # Calculate final results
         return self._build_result()
+
+    def _get_current_metrics(self) -> dict[str, float]:
+        """Get current performance metrics during simulation."""
+        total_pnl = sum(
+            p.realized_pnl + p.unrealized_pnl for p in self._positions.values()
+        )
+        initial = self.config.initial_capital
+        equity = initial + total_pnl
+
+        return {
+            "total_pnl": total_pnl,
+            "return_pct": (equity / initial - 1) * 100 if initial > 0 else 0.0,
+            "trades": len(self._fills),
+            "positions": len([p for p in self._positions.values() if not p.is_flat]),
+        }
 
     def _process_signal(
         self,
@@ -387,6 +494,7 @@ class BacktestEngine:
                 commission=commission,
             )
             self._fills.append(fill)
+            self._log_fill(fill)
 
             # Update position
             self._update_position_on_buy(position, quantity, fill_price)
@@ -453,6 +561,7 @@ class BacktestEngine:
                 commission=commission,
             )
             self._fills.append(fill)
+            self._log_fill(fill)
 
             # Update position (negative for short)
             self._update_position_on_sell(position, quantity, fill_price)
@@ -514,6 +623,7 @@ class BacktestEngine:
                 commission=commission,
             )
             self._fills.append(fill)
+            self._log_fill(fill, close_reason=reason)
 
             # Update cash
             self._cash += position.quantity * fill_price - commission
@@ -554,6 +664,7 @@ class BacktestEngine:
                 commission=commission,
             )
             self._fills.append(fill)
+            self._log_fill(fill, close_reason=reason)
 
             # Update cash
             self._cash -= abs(position.quantity) * fill_price + commission
@@ -564,6 +675,38 @@ class BacktestEngine:
             position.avg_entry_price = 0
             position.notional = 0
             position.unrealized_pnl = 0
+
+    def _log_fill(self, fill: Fill, close_reason: str = "") -> None:
+        """Log a fill execution to the trade buffer and structured log."""
+        if not self._enable_logging:
+            return
+
+        # Log to trade buffer for memory-efficient storage
+        if self._trade_buffer is not None:
+            self._trade_buffer.log_trade(
+                timestamp=fill.timestamp,
+                symbol=fill.symbol,
+                side=fill.side,
+                quantity=fill.quantity,
+                price=fill.price,
+                notional=fill.notional,
+                slippage_bps=fill.slippage_bps,
+                commission=fill.commission,
+            )
+
+        # Structured log for individual trades (debug level to avoid spam)
+        logger.debug(
+            "trade_executed",
+            timestamp=fill.timestamp.isoformat(),
+            symbol=fill.symbol,
+            side=fill.side,
+            quantity=fill.quantity,
+            price=fill.price,
+            notional=fill.notional,
+            slippage_bps=fill.slippage_bps,
+            commission=fill.commission,
+            close_reason=close_reason if close_reason else None,
+        )
 
     def _update_position_on_buy(
         self, position: Position, quantity: float, price: float

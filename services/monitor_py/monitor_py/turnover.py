@@ -1,14 +1,48 @@
 """Turnover Analysis.
 
 Monitor portfolio turnover for cost management.
+Provides trade logging with notional values, daily turnover summaries,
+and threshold breach alerts for dashboard display.
 """
 
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from enum import Enum
+from typing import Callable
 
 import structlog
 
 logger = structlog.get_logger(__name__)
+
+
+class TurnoverAlertSeverity(str, Enum):
+    """Alert severity levels for turnover monitoring."""
+
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"
+
+
+@dataclass
+class TurnoverAlert:
+    """Alert generated from turnover monitoring.
+
+    Attributes:
+        timestamp: When the alert was generated.
+        severity: Alert severity level.
+        message: Human-readable alert message.
+        daily_turnover: Daily turnover as percentage at time of alert.
+        estimated_cost: Estimated cost from turnover.
+        details: Additional context details.
+    """
+
+    timestamp: datetime
+    severity: TurnoverAlertSeverity
+    message: str
+    daily_turnover: float
+    estimated_cost: float
+    details: dict[str, object] | None = None
 
 
 @dataclass
@@ -68,6 +102,7 @@ class TurnoverStats:
         total_turnover: Total turnover in window as decimal of portfolio.
         estimated_cost: Estimated cost from turnover.
         alert_level: Current alert level.
+        target_daily_turnover: Target daily turnover threshold.
     """
 
     total_trades: int
@@ -77,6 +112,26 @@ class TurnoverStats:
     total_turnover: float
     estimated_cost: float
     alert_level: str
+    target_daily_turnover: float = 0.20
+
+    @property
+    def daily_turnover_pct(self) -> str:
+        """Return daily turnover as formatted percentage string."""
+        return f"{self.daily_turnover * 100:.1f}%"
+
+    @property
+    def target_pct(self) -> str:
+        """Return target daily turnover as formatted percentage string."""
+        return f"<{self.target_daily_turnover * 100:.0f}%"
+
+    @property
+    def status_emoji(self) -> str:
+        """Return status emoji based on alert level."""
+        return {
+            "none": "[green]OK[/green]",
+            "warning": "[yellow]WARN[/yellow]",
+            "critical": "[red]CRIT[/red]",
+        }.get(self.alert_level, "[green]OK[/green]")
 
 
 @dataclass
@@ -84,16 +139,35 @@ class TurnoverAnalyzer:
     """Analyze portfolio turnover for cost management.
 
     Monitors trading activity to detect excessive turnover
-    and estimate associated costs.
+    and estimate associated costs. Provides structured logging
+    and alert history for dashboard display.
     """
 
     config: TurnoverConfig
     portfolio_value: float
     _trade_history: list[TradeRecord] = field(default_factory=list, init=False)
+    _alert_history: deque[TurnoverAlert] = field(default_factory=deque, init=False)
+    _stats_callbacks: list[Callable[[TurnoverStats], None]] = field(
+        default_factory=list, init=False
+    )
+    _last_alert_level: str = field(default="none", init=False)
 
     def __post_init__(self) -> None:
         """Initialize after dataclass creation."""
         self._trade_history = []
+        self._alert_history = deque(maxlen=100)  # Keep last 100 alerts
+        self._stats_callbacks = []
+        self._last_alert_level = "none"
+
+    def register_stats_callback(
+        self, callback: Callable[[TurnoverStats], None]
+    ) -> None:
+        """Register a callback to receive stats updates.
+
+        Args:
+            callback: Function to call with updated stats.
+        """
+        self._stats_callbacks.append(callback)
 
     def record_trade(
         self,
@@ -104,7 +178,7 @@ class TurnoverAnalyzer:
         price: float,
         timestamp: datetime | None = None,
     ) -> TradeRecord:
-        """Record a trade.
+        """Record a trade with structured logging.
 
         Args:
             trade_id: Unique trade identifier.
@@ -131,15 +205,107 @@ class TurnoverAnalyzer:
 
         self._trade_history.append(record)
 
-        logger.debug(
+        # Structured logging for trade with notional value
+        turnover_pct = (
+            record.notional_value / self.portfolio_value * 100
+            if self.portfolio_value > 0
+            else 0.0
+        )
+
+        logger.info(
             "trade_recorded",
             trade_id=trade_id,
             symbol=symbol,
             side=side,
-            notional_value=record.notional_value,
+            quantity=quantity,
+            price=price,
+            notional_value=round(record.notional_value, 2),
+            turnover_pct=round(turnover_pct, 4),
+            portfolio_value=self.portfolio_value,
+            timestamp=timestamp.isoformat(),
         )
 
+        # Emit stats update and check for alerts
+        self._emit_stats_and_check_alerts()
+
         return record
+
+    def _emit_stats_and_check_alerts(self) -> None:
+        """Emit stats to callbacks and check for alert level changes."""
+        stats = self.get_stats()
+
+        # Notify callbacks
+        for callback in self._stats_callbacks:
+            try:
+                callback(stats)
+            except Exception as e:
+                logger.error("stats_callback_error", error=str(e))
+
+        # Check for alert level change
+        if stats.alert_level != self._last_alert_level:
+            self._generate_alert(stats)
+            self._last_alert_level = stats.alert_level
+
+    def _generate_alert(self, stats: TurnoverStats) -> None:
+        """Generate and log an alert based on current stats.
+
+        Args:
+            stats: Current turnover statistics.
+        """
+        now = datetime.now(UTC)
+
+        if stats.alert_level == "critical":
+            severity = TurnoverAlertSeverity.CRITICAL
+            message = f"Daily turnover critical: {stats.daily_turnover_pct} (threshold: {self.config.daily_turnover_critical * 100:.0f}%)"
+        elif stats.alert_level == "warning":
+            severity = TurnoverAlertSeverity.WARNING
+            message = f"Daily turnover approaching limit: {stats.daily_turnover_pct} (threshold: {self.config.daily_turnover_warning * 100:.0f}%)"
+        else:
+            severity = TurnoverAlertSeverity.INFO
+            message = f"Daily turnover normalized: {stats.daily_turnover_pct}"
+
+        alert = TurnoverAlert(
+            timestamp=now,
+            severity=severity,
+            message=message,
+            daily_turnover=stats.daily_turnover,
+            estimated_cost=stats.estimated_cost,
+            details={
+                "total_trades": stats.total_trades,
+                "total_volume": stats.total_volume,
+                "weekly_turnover": stats.weekly_turnover,
+            },
+        )
+
+        self._alert_history.append(alert)
+
+        # Log with appropriate level
+        log_func = {
+            TurnoverAlertSeverity.CRITICAL: logger.error,
+            TurnoverAlertSeverity.WARNING: logger.warning,
+            TurnoverAlertSeverity.INFO: logger.info,
+        }[severity]
+
+        log_func(
+            "turnover_alert",
+            severity=severity.value,
+            message=message,
+            daily_turnover=stats.daily_turnover,
+            daily_turnover_pct=stats.daily_turnover_pct,
+            estimated_cost=round(stats.estimated_cost, 2),
+            total_trades=stats.total_trades,
+        )
+
+    def get_alert_history(self, limit: int = 10) -> list[TurnoverAlert]:
+        """Get recent alert history.
+
+        Args:
+            limit: Maximum number of alerts to return.
+
+        Returns:
+            List of recent TurnoverAlert objects.
+        """
+        return list(self._alert_history)[-limit:]
 
     def get_stats(self, symbol: str | None = None) -> TurnoverStats:
         """Get current turnover statistics.
@@ -173,6 +339,7 @@ class TurnoverAnalyzer:
                 total_turnover=0.0,
                 estimated_cost=0.0,
                 alert_level="none",
+                target_daily_turnover=self.config.daily_turnover_warning,
             )
 
         # Calculate volumes
@@ -205,7 +372,32 @@ class TurnoverAnalyzer:
             total_turnover=total_turnover,
             estimated_cost=estimated_cost,
             alert_level=alert_level,
+            target_daily_turnover=self.config.daily_turnover_warning,
         )
+
+    def emit_daily_summary(self) -> TurnoverStats:
+        """Emit a daily turnover summary with structured logging.
+
+        Returns:
+            Current TurnoverStats.
+        """
+        stats = self.get_stats()
+        breakdown = self.get_daily_breakdown(days=7)
+
+        logger.info(
+            "turnover_daily_summary",
+            total_trades=stats.total_trades,
+            total_volume=round(stats.total_volume, 2),
+            daily_turnover=round(stats.daily_turnover, 4),
+            daily_turnover_pct=stats.daily_turnover_pct,
+            weekly_turnover=round(stats.weekly_turnover, 4),
+            estimated_cost=round(stats.estimated_cost, 2),
+            alert_level=stats.alert_level,
+            portfolio_value=self.portfolio_value,
+            breakdown=breakdown,
+        )
+
+        return stats
 
     def should_alert(self) -> bool:
         """Check if turnover alert should be triggered.

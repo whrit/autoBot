@@ -47,10 +47,21 @@ from backtester_py.evaluation import (
     WalkForwardEvaluator,
     calculate_metrics,
 )
+from backtester_py.logging_config import (
+    configure_logging,
+    console,
+    get_logger,
+    get_trade_buffer,
+)
 from backtester_py.metrics import BacktestMetrics, MetricsCalculator
 from backtester_py.purged_cv import PurgedCrossValidator
 from backtester_py.regimes import RegimeAnalyzer, RegimeType
-from backtester_py.walk_forward import WalkForwardOptimizer
+from backtester_py.visualization import (
+    generate_equity_chart,
+    generate_html_report,
+    generate_trade_summary_table,
+)
+from backtester_py.walk_forward import FoldResult, WalkForwardOptimizer, WalkForwardResult
 
 __all__ = [
     # Engine
@@ -70,11 +81,21 @@ __all__ = [
     "MetricsCalculator",
     # Walk-forward (T3.05 - additional)
     "WalkForwardOptimizer",
+    "FoldResult",
+    "WalkForwardResult",
     # Regimes (T3.07)
     "RegimeAnalyzer",
     "RegimeType",
     # Purged CV (T3.08)
     "PurgedCrossValidator",
+    # Logging & Visualization
+    "configure_logging",
+    "console",
+    "get_logger",
+    "get_trade_buffer",
+    "generate_equity_chart",
+    "generate_html_report",
+    "generate_trade_summary_table",
 ]
 
 __version__ = "0.1.0"

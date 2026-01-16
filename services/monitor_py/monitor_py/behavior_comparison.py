@@ -1,15 +1,48 @@
 """Shadow vs Backtest Behavior Comparison.
 
 Validate shadow trading matches backtest behavior.
+Provides signal alignment logging, drift detection alerts,
+and divergence reports for dashboard display.
 """
 
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import Enum
+from typing import Callable
 
 import structlog
 
 logger = structlog.get_logger(__name__)
+
+
+class BehaviorAlertSeverity(str, Enum):
+    """Alert severity levels for behavior comparison."""
+
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"
+
+
+@dataclass
+class BehaviorAlert:
+    """Alert generated from behavior comparison.
+
+    Attributes:
+        timestamp: When the alert was generated.
+        severity: Alert severity level.
+        message: Human-readable alert message.
+        drift_score: Drift score at time of alert.
+        signal_alignment_rate: Signal alignment rate at time of alert.
+        details: Additional context details.
+    """
+
+    timestamp: datetime
+    severity: BehaviorAlertSeverity
+    message: str
+    drift_score: float
+    signal_alignment_rate: float
+    details: dict[str, object] | None = None
 
 
 @dataclass
@@ -98,6 +131,7 @@ class BehaviorStats:
         timing_within_tolerance: Whether timing is within tolerance.
         drift_score: Overall drift score (0.0 = perfect alignment).
         alert_level: Current alert level.
+        target_alignment_rate: Target signal alignment rate.
     """
 
     total_signals: int
@@ -111,6 +145,26 @@ class BehaviorStats:
     timing_within_tolerance: bool
     drift_score: float
     alert_level: str
+    target_alignment_rate: float = 0.95
+
+    @property
+    def alignment_rate_pct(self) -> str:
+        """Return signal alignment rate as formatted percentage string."""
+        return f"{self.signal_alignment_rate * 100:.1f}%"
+
+    @property
+    def target_pct(self) -> str:
+        """Return target alignment rate as formatted percentage string."""
+        return f"{self.target_alignment_rate * 100:.0f}%"
+
+    @property
+    def status_emoji(self) -> str:
+        """Return status emoji based on alert level."""
+        return {
+            "none": "[green]OK[/green]",
+            "warning": "[yellow]WARN[/yellow]",
+            "critical": "[red]CRIT[/red]",
+        }.get(self.alert_level, "[green]OK[/green]")
 
 
 @dataclass
@@ -119,6 +173,7 @@ class BehaviorComparator:
 
     Monitors signal alignment, execution timing, and drift
     to ensure shadow trading matches backtest behavior.
+    Provides structured logging and alert history for dashboard display.
     """
 
     config: BehaviorConfig
@@ -128,6 +183,11 @@ class BehaviorComparator:
     _shadow_executions: dict[str, ExecutionRecord] = field(default_factory=dict, init=False)
     _signal_order: deque[str] = field(default_factory=deque, init=False)
     _execution_order: deque[str] = field(default_factory=deque, init=False)
+    _alert_history: deque[BehaviorAlert] = field(default_factory=deque, init=False)
+    _stats_callbacks: list[Callable[[BehaviorStats], None]] = field(
+        default_factory=list, init=False
+    )
+    _last_alert_level: str = field(default="none", init=False)
 
     def __post_init__(self) -> None:
         """Initialize after dataclass creation."""
@@ -137,6 +197,19 @@ class BehaviorComparator:
         self._shadow_executions = {}
         self._signal_order = deque(maxlen=self.config.window_size)
         self._execution_order = deque(maxlen=self.config.window_size)
+        self._alert_history = deque(maxlen=100)  # Keep last 100 alerts
+        self._stats_callbacks = []
+        self._last_alert_level = "none"
+
+    def register_stats_callback(
+        self, callback: Callable[[BehaviorStats], None]
+    ) -> None:
+        """Register a callback to receive stats updates.
+
+        Args:
+            callback: Function to call with updated stats.
+        """
+        self._stats_callbacks.append(callback)
 
     def record_backtest_signal(
         self,
@@ -185,7 +258,7 @@ class BehaviorComparator:
         strength: float,
         timestamp: datetime | None = None,
     ) -> SignalRecord:
-        """Record a shadow signal.
+        """Record a shadow signal with alignment logging.
 
         Args:
             signal_id: Unique signal identifier.
@@ -213,8 +286,125 @@ class BehaviorComparator:
         if signal_id not in self._signal_order:
             self._signal_order.append(signal_id)
 
-        logger.debug("shadow_signal_recorded", signal_id=signal_id, signal_type=signal_type)
+        # Log shadow signal with alignment check
+        backtest_signal = self._backtest_signals.get(signal_id)
+        if backtest_signal:
+            is_aligned = backtest_signal.signal_type == signal_type
+            strength_diff = abs(backtest_signal.strength - strength)
+
+            if is_aligned:
+                logger.info(
+                    "shadow_signal_aligned",
+                    signal_id=signal_id,
+                    symbol=symbol,
+                    signal_type=signal_type,
+                    strength=strength,
+                    strength_diff=round(strength_diff, 4),
+                    timestamp=timestamp.isoformat(),
+                )
+            else:
+                logger.warning(
+                    "shadow_signal_diverged",
+                    signal_id=signal_id,
+                    symbol=symbol,
+                    shadow_type=signal_type,
+                    backtest_type=backtest_signal.signal_type,
+                    shadow_strength=strength,
+                    backtest_strength=backtest_signal.strength,
+                    timestamp=timestamp.isoformat(),
+                )
+        else:
+            logger.debug(
+                "shadow_signal_recorded",
+                signal_id=signal_id,
+                symbol=symbol,
+                signal_type=signal_type,
+                strength=strength,
+                timestamp=timestamp.isoformat(),
+            )
+
+        # Check for drift and emit stats
+        self._emit_stats_and_check_alerts()
+
         return record
+
+    def _emit_stats_and_check_alerts(self) -> None:
+        """Emit stats to callbacks and check for alert level changes."""
+        stats = self.get_stats()
+
+        # Notify callbacks
+        for callback in self._stats_callbacks:
+            try:
+                callback(stats)
+            except Exception as e:
+                logger.error("stats_callback_error", error=str(e))
+
+        # Check for alert level change
+        if stats.alert_level != self._last_alert_level:
+            self._generate_alert(stats)
+            self._last_alert_level = stats.alert_level
+
+    def _generate_alert(self, stats: BehaviorStats) -> None:
+        """Generate and log an alert based on current stats.
+
+        Args:
+            stats: Current behavior statistics.
+        """
+        now = datetime.now(UTC)
+
+        if stats.alert_level == "critical":
+            severity = BehaviorAlertSeverity.CRITICAL
+            message = f"Behavior drift critical: {stats.drift_score:.1%} (alignment: {stats.alignment_rate_pct})"
+        elif stats.alert_level == "warning":
+            severity = BehaviorAlertSeverity.WARNING
+            message = f"Behavior drift warning: {stats.drift_score:.1%} (alignment: {stats.alignment_rate_pct})"
+        else:
+            severity = BehaviorAlertSeverity.INFO
+            message = f"Behavior alignment recovered: {stats.alignment_rate_pct}"
+
+        alert = BehaviorAlert(
+            timestamp=now,
+            severity=severity,
+            message=message,
+            drift_score=stats.drift_score,
+            signal_alignment_rate=stats.signal_alignment_rate,
+            details={
+                "total_signals": stats.total_signals,
+                "aligned_signals": stats.aligned_signals,
+                "avg_timing_drift_ms": stats.avg_timing_drift_ms,
+                "timing_within_tolerance": stats.timing_within_tolerance,
+            },
+        )
+
+        self._alert_history.append(alert)
+
+        # Log with appropriate level
+        log_func = {
+            BehaviorAlertSeverity.CRITICAL: logger.error,
+            BehaviorAlertSeverity.WARNING: logger.warning,
+            BehaviorAlertSeverity.INFO: logger.info,
+        }[severity]
+
+        log_func(
+            "behavior_drift_alert",
+            severity=severity.value,
+            message=message,
+            drift_score=round(stats.drift_score, 4),
+            signal_alignment_rate=round(stats.signal_alignment_rate, 4),
+            alignment_rate_pct=stats.alignment_rate_pct,
+            total_signals=stats.total_signals,
+        )
+
+    def get_alert_history(self, limit: int = 10) -> list[BehaviorAlert]:
+        """Get recent alert history.
+
+        Args:
+            limit: Maximum number of alerts to return.
+
+        Returns:
+            List of recent BehaviorAlert objects.
+        """
+        return list(self._alert_history)[-limit:]
 
     def record_backtest_execution(
         self,
@@ -395,6 +585,7 @@ class BehaviorComparator:
                 timing_within_tolerance=True,
                 drift_score=0.0,
                 alert_level="none",
+                target_alignment_rate=self.config.signal_alignment_threshold,
             )
 
         return BehaviorStats(
@@ -409,6 +600,7 @@ class BehaviorComparator:
             timing_within_tolerance=timing_within_tolerance,
             drift_score=drift_score,
             alert_level=alert_level,
+            target_alignment_rate=self.config.signal_alignment_threshold,
         )
 
     def should_alert(self) -> bool:
@@ -462,6 +654,44 @@ class BehaviorComparator:
                     "reason": "missing_shadow_signal",
                     "timestamp": backtest.timestamp.isoformat(),
                 })
+
+        return divergences
+
+    def emit_divergence_report(self, symbol: str | None = None) -> list[dict[str, object]]:
+        """Emit a divergence report with structured logging.
+
+        Args:
+            symbol: Optional symbol to filter report.
+
+        Returns:
+            List of divergence records.
+        """
+        divergences = self.get_divergence_report(symbol)
+        stats = self.get_stats(symbol)
+
+        logger.info(
+            "behavior_divergence_report",
+            total_divergences=len(divergences),
+            total_signals=stats.total_signals,
+            aligned_signals=stats.aligned_signals,
+            signal_alignment_rate=round(stats.signal_alignment_rate, 4),
+            alignment_rate_pct=stats.alignment_rate_pct,
+            drift_score=round(stats.drift_score, 4),
+            alert_level=stats.alert_level,
+            symbol=symbol,
+        )
+
+        # Log each divergence
+        for div in divergences:
+            logger.warning(
+                "behavior_divergence",
+                signal_id=div.get("signal_id"),
+                symbol=div.get("symbol"),
+                backtest_type=div.get("backtest_type"),
+                shadow_type=div.get("shadow_type"),
+                reason=div.get("reason", "signal_mismatch"),
+                timestamp=div.get("timestamp"),
+            )
 
         return divergences
 
