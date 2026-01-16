@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: runner-py
+Version: 0.1.0
+Summary: Runner service for shadow and paper execution via Alpaca
+Requires-Python: >=3.12
+Requires-Dist: alpaca-py>=0.30.0
+Requires-Dist: httpx>=0.27.0
+Requires-Dist: polars>=1.0.0
+Requires-Dist: numpy>=2.0.0
+Requires-Dist: structlog>=24.0.0
+Requires-Dist: pyarrow>=15.0.0
+Requires-Dist: common-types
+Requires-Dist: cost-models
+Requires-Dist: risk-models
+Requires-Dist: backtester-py

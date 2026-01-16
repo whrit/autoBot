@@ -53,6 +53,7 @@ members = [
   "services/optimizer_py",
   "services/registry_api_py",
   "services/monitor_py",
+  "services/runner_py",
   "libs/common_types",
   "libs/cost_models",
   "libs/risk_models",
