@@ -7,12 +7,14 @@ Tests cover:
 - Alert checking
 - Automatic promotion execution
 - Candidate scanning
+- PromotionState lifecycle
+- PromotionDecision dataclass
+- PromotionManager high-level operations
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -20,7 +22,10 @@ import pytest
 from runner_py.promotion import (
     AutoPromoter,
     PromotionCriteria,
+    PromotionDecision,
     PromotionEvaluation,
+    PromotionManager,
+    PromotionState,
 )
 
 
@@ -107,7 +112,7 @@ class TestPromotionEvaluation:
                 "no_alerts": True,
             },
             eligible=False,
-            message="Strategy does not meet promotion criteria: min_shadow_sharpe, min_shadow_trades",
+            message="Strategy does not meet criteria: min_shadow_sharpe, min_shadow_trades",
         )
 
         assert eval_result.eligible is False
@@ -416,17 +421,20 @@ class TestAutoPromoter:
             "shadow_days": 7,
         }
 
-        with patch.object(promoter, "_http_client") as mock_client:
-            mock_response = AsyncMock()
-            mock_response.json.return_value = mock_response_data
-            mock_response.raise_for_status = MagicMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
+        # Directly assign the mock client (not using patch.object)
+        mock_response = MagicMock()
+        mock_response.json.return_value = mock_response_data
+        mock_response.raise_for_status = MagicMock()
 
-            performance = await promoter._get_shadow_performance("1")
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        promoter._http_client = mock_client
 
-            assert performance["sharpe"] == 0.75
-            assert performance["max_drawdown"] == 0.08
-            assert performance["num_trades"] == 45
+        performance = await promoter._get_shadow_performance("1")
+
+        assert performance["sharpe"] == 0.75
+        assert performance["max_drawdown"] == 0.08
+        assert performance["num_trades"] == 45
 
     async def test_get_strategy_alerts(self) -> None:
         """Test fetching strategy alerts."""
@@ -437,31 +445,37 @@ class TestAutoPromoter:
             {"id": 2, "type": "latency", "severity": "info"},
         ]
 
-        with patch.object(promoter, "_http_client") as mock_client:
-            mock_response = AsyncMock()
-            mock_response.json.return_value = mock_alerts
-            mock_response.raise_for_status = MagicMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
+        # Directly assign the mock client
+        mock_response = MagicMock()
+        mock_response.json.return_value = mock_alerts
+        mock_response.raise_for_status = MagicMock()
 
-            alerts = await promoter._get_strategy_alerts("1")
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        promoter._http_client = mock_client
 
-            assert len(alerts) == 2
-            assert alerts[0]["type"] == "drawdown"
+        alerts = await promoter._get_strategy_alerts("1")
+
+        assert len(alerts) == 2
+        assert alerts[0]["type"] == "drawdown"
 
     async def test_call_registry_promote(self) -> None:
         """Test calling registry API to promote strategy."""
         promoter = AutoPromoter()
 
-        with patch.object(promoter, "_http_client") as mock_client:
-            mock_response = AsyncMock()
-            mock_response.json.return_value = {"success": True}
-            mock_response.raise_for_status = MagicMock()
-            mock_client.post = AsyncMock(return_value=mock_response)
+        # Directly assign the mock client
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True}
+        mock_response.raise_for_status = MagicMock()
 
-            result = await promoter._call_registry_promote("1", "paper")
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        promoter._http_client = mock_client
 
-            assert result is True
-            mock_client.post.assert_called_once()
+        result = await promoter._call_registry_promote("1", "paper")
+
+        assert result is True
+        mock_client.post.assert_called_once()
 
     async def test_call_registry_promote_failure(self) -> None:
         """Test handling promotion API failure."""
@@ -584,3 +598,412 @@ class TestAutoPromoterIntegration:
 
             eligible_count = sum(1 for e in evaluations if e.eligible)
             assert eligible_count == 2
+
+
+# =============================================================================
+# T6.06 PromotionState Tests
+# =============================================================================
+
+
+class TestPromotionState:
+    """Tests for PromotionState enum."""
+
+    def test_state_values(self) -> None:
+        """Test all promotion state values."""
+        assert PromotionState.CANDIDATE.value == "candidate"
+        assert PromotionState.SHADOW.value == "shadow"
+        assert PromotionState.PAPER.value == "paper"
+        assert PromotionState.LIVE.value == "live"
+        assert PromotionState.RETIRED.value == "retired"
+
+    def test_state_is_string_enum(self) -> None:
+        """Test that PromotionState is a string enum."""
+        assert isinstance(PromotionState.SHADOW, str)
+        assert PromotionState.SHADOW == "shadow"
+
+    def test_valid_transitions(self) -> None:
+        """Test valid state transitions mapping."""
+        transitions = PromotionState.valid_transitions()
+
+        assert PromotionState.SHADOW in transitions[PromotionState.CANDIDATE]
+        assert PromotionState.PAPER in transitions[PromotionState.SHADOW]
+        assert PromotionState.LIVE in transitions[PromotionState.PAPER]
+        assert transitions[PromotionState.RETIRED] == []
+
+    def test_can_transition_to_valid(self) -> None:
+        """Test valid transition checks."""
+        assert PromotionState.CANDIDATE.can_transition_to(PromotionState.SHADOW) is True
+        assert PromotionState.SHADOW.can_transition_to(PromotionState.PAPER) is True
+        assert PromotionState.PAPER.can_transition_to(PromotionState.LIVE) is True
+
+    def test_can_transition_to_invalid(self) -> None:
+        """Test invalid transition checks."""
+        assert PromotionState.CANDIDATE.can_transition_to(PromotionState.PAPER) is False
+        assert PromotionState.SHADOW.can_transition_to(PromotionState.LIVE) is False
+        assert PromotionState.RETIRED.can_transition_to(PromotionState.SHADOW) is False
+
+    def test_can_transition_to_retired(self) -> None:
+        """Test that all states can transition to retired."""
+        assert PromotionState.CANDIDATE.can_transition_to(PromotionState.RETIRED) is True
+        assert PromotionState.SHADOW.can_transition_to(PromotionState.RETIRED) is True
+        assert PromotionState.PAPER.can_transition_to(PromotionState.RETIRED) is True
+        assert PromotionState.LIVE.can_transition_to(PromotionState.RETIRED) is True
+
+    def test_paper_can_demote_to_shadow(self) -> None:
+        """Test that paper can be demoted back to shadow."""
+        assert PromotionState.PAPER.can_transition_to(PromotionState.SHADOW) is True
+
+    def test_live_can_demote_to_paper(self) -> None:
+        """Test that live can be demoted back to paper."""
+        assert PromotionState.LIVE.can_transition_to(PromotionState.PAPER) is True
+
+
+class TestPromotionDecision:
+    """Tests for PromotionDecision dataclass."""
+
+    def test_decision_creation(self) -> None:
+        """Test creating a promotion decision."""
+        decision = PromotionDecision(
+            strategy_id="strategy_123",
+            from_state=PromotionState.SHADOW,
+            to_state=PromotionState.PAPER,
+            approved=True,
+            criteria_results={"min_shadow_days": True, "min_sharpe": True},
+            performance_metrics={"sharpe": 0.8, "max_drawdown": 0.05},
+            reason="Strategy meets all criteria",
+        )
+
+        assert decision.strategy_id == "strategy_123"
+        assert decision.from_state == PromotionState.SHADOW
+        assert decision.to_state == PromotionState.PAPER
+        assert decision.approved is True
+        assert decision.criteria_results["min_shadow_days"] is True
+        assert decision.performance_metrics["sharpe"] == 0.8
+        assert decision.auto_promoted is False
+        assert decision.reviewer_id is None
+
+    def test_decision_with_auto_promoted(self) -> None:
+        """Test decision with auto_promoted flag."""
+        decision = PromotionDecision(
+            strategy_id="strategy_456",
+            from_state=PromotionState.SHADOW,
+            to_state=PromotionState.PAPER,
+            approved=True,
+            criteria_results={},
+            performance_metrics={},
+            reason="Auto promoted",
+            auto_promoted=True,
+        )
+
+        assert decision.auto_promoted is True
+
+    def test_decision_with_reviewer(self) -> None:
+        """Test decision with manual reviewer."""
+        decision = PromotionDecision(
+            strategy_id="strategy_789",
+            from_state=PromotionState.PAPER,
+            to_state=PromotionState.LIVE,
+            approved=True,
+            criteria_results={},
+            performance_metrics={},
+            reason="Manual approval",
+            reviewer_id="admin_user",
+        )
+
+        assert decision.reviewer_id == "admin_user"
+        assert decision.auto_promoted is False
+
+    def test_decision_has_timestamp(self) -> None:
+        """Test that decision has a timestamp."""
+        decision = PromotionDecision(
+            strategy_id="test",
+            from_state=PromotionState.SHADOW,
+            to_state=PromotionState.PAPER,
+            approved=False,
+            criteria_results={},
+            performance_metrics={},
+            reason="Test",
+        )
+
+        assert decision.timestamp is not None
+        assert isinstance(decision.timestamp, datetime)
+
+
+class TestPromotionManager:
+    """Tests for PromotionManager class."""
+
+    def test_manager_init_default(self) -> None:
+        """Test manager initialization with defaults."""
+        manager = PromotionManager()
+
+        assert manager.default_criteria.min_shadow_days == 5
+        assert manager.registry_api_url == "http://localhost:8080"
+
+    def test_manager_init_custom_criteria(self) -> None:
+        """Test manager initialization with custom criteria."""
+        criteria = PromotionCriteria(min_shadow_days=10, min_shadow_sharpe=0.6)
+        manager = PromotionManager(
+            criteria=criteria,
+            registry_api_url="http://registry:9000",
+        )
+
+        assert manager.default_criteria.min_shadow_days == 10
+        assert manager.default_criteria.min_shadow_sharpe == 0.6
+        assert manager.registry_api_url == "http://registry:9000"
+
+    def test_get_state_from_string_valid(self) -> None:
+        """Test converting valid state strings."""
+        manager = PromotionManager()
+
+        assert manager.get_state_from_string("shadow") == PromotionState.SHADOW
+        assert manager.get_state_from_string("PAPER") == PromotionState.PAPER
+        assert manager.get_state_from_string("Candidate") == PromotionState.CANDIDATE
+
+    def test_get_state_from_string_invalid(self) -> None:
+        """Test converting invalid state string raises error."""
+        manager = PromotionManager()
+
+        with pytest.raises(ValueError, match="Invalid promotion state"):
+            manager.get_state_from_string("invalid_state")
+
+    def test_validate_transition_valid(self) -> None:
+        """Test validating valid transitions."""
+        manager = PromotionManager()
+
+        assert manager.validate_transition(
+            PromotionState.SHADOW, PromotionState.PAPER
+        ) is True
+        assert manager.validate_transition(
+            PromotionState.CANDIDATE, PromotionState.SHADOW
+        ) is True
+
+    def test_validate_transition_invalid(self) -> None:
+        """Test validating invalid transitions."""
+        manager = PromotionManager()
+
+        assert manager.validate_transition(
+            PromotionState.CANDIDATE, PromotionState.LIVE
+        ) is False
+        assert manager.validate_transition(
+            PromotionState.RETIRED, PromotionState.SHADOW
+        ) is False
+
+    def test_get_next_state(self) -> None:
+        """Test getting next state in lifecycle."""
+        manager = PromotionManager()
+
+        assert manager._get_next_state(PromotionState.CANDIDATE) == PromotionState.SHADOW
+        assert manager._get_next_state(PromotionState.SHADOW) == PromotionState.PAPER
+        assert manager._get_next_state(PromotionState.PAPER) == PromotionState.LIVE
+        assert manager._get_next_state(PromotionState.LIVE) == PromotionState.RETIRED
+        assert manager._get_next_state(PromotionState.RETIRED) == PromotionState.RETIRED
+
+    def test_decision_history_empty(self) -> None:
+        """Test empty decision history."""
+        manager = PromotionManager()
+
+        history = manager.get_decision_history()
+        assert len(history) == 0
+
+    def test_clear_history(self) -> None:
+        """Test clearing decision history."""
+        manager = PromotionManager()
+        # Manually add a decision to history
+        manager._decision_history.append(
+            PromotionDecision(
+                strategy_id="test",
+                from_state=PromotionState.SHADOW,
+                to_state=PromotionState.PAPER,
+                approved=True,
+                criteria_results={},
+                performance_metrics={},
+                reason="Test",
+            )
+        )
+
+        assert len(manager.get_decision_history()) == 1
+        manager.clear_history()
+        assert len(manager.get_decision_history()) == 0
+
+    def test_get_decision_history_with_filter(self) -> None:
+        """Test filtering decision history by strategy_id."""
+        manager = PromotionManager()
+
+        # Add decisions for different strategies
+        manager._decision_history.append(
+            PromotionDecision(
+                strategy_id="strat_1",
+                from_state=PromotionState.SHADOW,
+                to_state=PromotionState.PAPER,
+                approved=True,
+                criteria_results={},
+                performance_metrics={},
+                reason="Test 1",
+            )
+        )
+        manager._decision_history.append(
+            PromotionDecision(
+                strategy_id="strat_2",
+                from_state=PromotionState.SHADOW,
+                to_state=PromotionState.PAPER,
+                approved=False,
+                criteria_results={},
+                performance_metrics={},
+                reason="Test 2",
+            )
+        )
+
+        all_history = manager.get_decision_history()
+        assert len(all_history) == 2
+
+        filtered = manager.get_decision_history(strategy_id="strat_1")
+        assert len(filtered) == 1
+        assert filtered[0].strategy_id == "strat_1"
+
+    def test_get_decision_history_with_limit(self) -> None:
+        """Test limiting decision history results."""
+        manager = PromotionManager()
+
+        # Add multiple decisions
+        for i in range(5):
+            manager._decision_history.append(
+                PromotionDecision(
+                    strategy_id=f"strat_{i}",
+                    from_state=PromotionState.SHADOW,
+                    to_state=PromotionState.PAPER,
+                    approved=True,
+                    criteria_results={},
+                    performance_metrics={},
+                    reason=f"Test {i}",
+                )
+            )
+
+        limited = manager.get_decision_history(limit=3)
+        assert len(limited) == 3
+        # Should return the last 3 entries
+        assert limited[0].strategy_id == "strat_2"
+        assert limited[2].strategy_id == "strat_4"
+
+    async def test_evaluate_promotion(self) -> None:
+        """Test evaluating a strategy for promotion."""
+        manager = PromotionManager()
+
+        mock_evaluation = PromotionEvaluation(
+            strategy_id="1",
+            current_state="shadow",
+            target_state="paper",
+            criteria_met={"min_shadow_days": True, "min_sharpe": True},
+            eligible=True,
+            message="Eligible",
+        )
+
+        mock_performance = {
+            "sharpe": 0.8,
+            "max_drawdown": 0.05,
+            "num_trades": 50,
+            "shadow_days": 10,
+        }
+
+        with patch.object(
+            manager._promoter, "evaluate_promotion", return_value=mock_evaluation
+        ), patch.object(
+            manager._promoter, "_get_shadow_performance", return_value=mock_performance
+        ):
+            decision = await manager.evaluate_promotion("1")
+
+            assert decision.strategy_id == "1"
+            assert decision.from_state == PromotionState.SHADOW
+            assert decision.to_state == PromotionState.PAPER
+            assert decision.approved is True
+            assert decision.performance_metrics["sharpe"] == 0.8
+
+    async def test_promote_success(self) -> None:
+        """Test successful promotion execution."""
+        manager = PromotionManager()
+
+        mock_evaluation = PromotionEvaluation(
+            strategy_id="1",
+            current_state="shadow",
+            target_state="paper",
+            criteria_met={"all": True},
+            eligible=True,
+            message="Eligible",
+        )
+
+        mock_performance = {
+            "sharpe": 0.8, "max_drawdown": 0.05, "num_trades": 50, "shadow_days": 10
+        }
+
+        with patch.object(
+            manager._promoter, "evaluate_promotion", return_value=mock_evaluation
+        ), patch.object(
+            manager._promoter, "_get_shadow_performance", return_value=mock_performance
+        ), patch.object(
+            manager._promoter, "_call_registry_promote", return_value=True
+        ) as mock_promote:
+            decision = await manager.promote("1")
+
+            assert decision.approved is True
+            assert decision.auto_promoted is True
+            mock_promote.assert_called_once_with("1", "paper")
+
+    async def test_promote_not_approved(self) -> None:
+        """Test promotion when criteria not met."""
+        manager = PromotionManager()
+
+        mock_evaluation = PromotionEvaluation(
+            strategy_id="1",
+            current_state="shadow",
+            target_state="paper",
+            criteria_met={"sharpe": False},
+            eligible=False,
+            message="Not eligible - low sharpe",
+        )
+
+        mock_performance = {"sharpe": 0.2, "max_drawdown": 0.15, "num_trades": 10, "shadow_days": 3}
+
+        with patch.object(
+            manager._promoter, "evaluate_promotion", return_value=mock_evaluation
+        ), patch.object(
+            manager._promoter, "_get_shadow_performance", return_value=mock_performance
+        ):
+            decision = await manager.promote("1")
+
+            assert decision.approved is False
+
+    async def test_promote_with_reviewer(self) -> None:
+        """Test manual promotion with reviewer ID."""
+        manager = PromotionManager()
+
+        mock_evaluation = PromotionEvaluation(
+            strategy_id="1",
+            current_state="shadow",
+            target_state="paper",
+            criteria_met={"all": True},
+            eligible=True,
+            message="Eligible",
+        )
+
+        mock_performance = {
+            "sharpe": 0.8, "max_drawdown": 0.05, "num_trades": 50, "shadow_days": 10
+        }
+
+        with patch.object(
+            manager._promoter, "evaluate_promotion", return_value=mock_evaluation
+        ), patch.object(
+            manager._promoter, "_get_shadow_performance", return_value=mock_performance
+        ), patch.object(
+            manager._promoter, "_call_registry_promote", return_value=True
+        ):
+            decision = await manager.promote("1", auto=False, reviewer_id="admin")
+
+            assert decision.auto_promoted is False
+            assert decision.reviewer_id == "admin"
+
+    async def test_close(self) -> None:
+        """Test closing manager resources."""
+        manager = PromotionManager()
+
+        with patch.object(manager._promoter, "close") as mock_close:
+            await manager.close()
+            mock_close.assert_called_once()

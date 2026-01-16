@@ -338,10 +338,10 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 |---------|------|----------|------|--------|
 | T6.01 | runner: Shadow execution mode | 16 | M5 | [x] |
 | T6.02 | runner: Signal logging | 8 | T6.01 | [x] |
-| T6.03 | runner: Paper execution (Alpaca paper API) | 16 | T6.02 | [ ] |
-| T6.04 | runner: Fill confirmation via WebSocket | 10 | T6.03 | [ ] |
-| T6.05 | Autonomous loop: Daily/weekly orchestration | 12 | T6.04 | [ ] |
-| T6.06 | Autonomous loop: Shadow → paper promotion | 10 | T6.05 | [ ] |
+| T6.03 | runner: Paper execution (Alpaca paper API) | 16 | T6.02 | [x] |
+| T6.04 | runner: Fill confirmation via WebSocket | 10 | T6.03 | [x] |
+| T6.05 | Autonomous loop: Daily/weekly orchestration | 12 | T6.04 | [x] |
+| T6.06 | Autonomous loop: Shadow → paper promotion | 10 | T6.05 | [x] |
 | T6.07 | Shadow vs backtest behavior validation | 12 | T6.06 | [x] |
 | T6.08 | Paper slippage analysis | 8 | T6.07 | [x] |
 | T6.09 | End-to-end integration tests | 12 | T6.08 | [x] |
@@ -413,10 +413,10 @@ Deliver a **fully autonomous trading loop** with quotes + trades ingestion, mult
 | T5.12 | Registry/monitor tests | monitor | S5 | 4 | T5.11 | [x] |
 | T6.01 | Shadow execution mode | runner | S6 | 16 | M5 | [x] |
 | T6.02 | Signal logging | runner | S6 | 8 | T6.01 | [x] |
-| T6.03 | Paper execution | runner | S6 | 16 | T6.02 | [ ] |
-| T6.04 | Fill confirmation | runner | S6 | 10 | T6.03 | [ ] |
-| T6.05 | Autonomous orchestration | runner | S6 | 12 | T6.04 | [ ] |
-| T6.06 | Shadow→paper promotion | runner | S6 | 10 | T6.05 | [ ] |
+| T6.03 | Paper execution | runner | S6 | 16 | T6.02 | [x] |
+| T6.04 | Fill confirmation | runner | S6 | 10 | T6.03 | [x] |
+| T6.05 | Autonomous orchestration | runner | S6 | 12 | T6.04 | [x] |
+| T6.06 | Shadow→paper promotion | runner | S6 | 10 | T6.05 | [x] |
 | T6.07 | Shadow vs backtest validation | runner | S6 | 12 | T6.06 | [x] |
 | T6.08 | Paper slippage analysis | runner | S6 | 8 | T6.07 | [x] |
 | T6.09 | E2E integration tests | runner | S6 | 12 | T6.08 | [x] |

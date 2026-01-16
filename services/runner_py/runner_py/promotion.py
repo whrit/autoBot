@@ -10,11 +10,16 @@ to paper trading mode based on performance criteria:
 
 The AutoPromoter evaluates shadow strategies and promotes eligible
 ones to paper trading automatically.
+
+The PromotionManager provides a higher-level interface for managing
+the full promotion lifecycle including state tracking and history.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -24,6 +29,47 @@ if TYPE_CHECKING:
     pass
 
 logger = structlog.get_logger(__name__)
+
+
+class PromotionState(str, Enum):
+    """Strategy promotion lifecycle states."""
+
+    CANDIDATE = "candidate"
+    SHADOW = "shadow"
+    PAPER = "paper"
+    LIVE = "live"
+    RETIRED = "retired"
+
+    @classmethod
+    def valid_transitions(cls) -> dict[PromotionState, list[PromotionState]]:
+        """Return valid state transitions."""
+        return {
+            cls.CANDIDATE: [cls.SHADOW, cls.RETIRED],
+            cls.SHADOW: [cls.PAPER, cls.RETIRED],
+            cls.PAPER: [cls.LIVE, cls.SHADOW, cls.RETIRED],
+            cls.LIVE: [cls.PAPER, cls.RETIRED],
+            cls.RETIRED: [],
+        }
+
+    def can_transition_to(self, target: PromotionState) -> bool:
+        """Check if transition to target state is valid."""
+        return target in self.valid_transitions().get(self, [])
+
+
+@dataclass
+class PromotionDecision:
+    """Result of a promotion decision with full context."""
+
+    strategy_id: str
+    from_state: PromotionState
+    to_state: PromotionState
+    approved: bool
+    criteria_results: dict[str, bool]
+    performance_metrics: dict[str, float]
+    reason: str
+    timestamp: datetime = field(default_factory=datetime.now)
+    auto_promoted: bool = False
+    reviewer_id: str | None = None
 
 
 @dataclass
@@ -385,8 +431,321 @@ class AutoPromoter:
             self._http_client = None
 
 
+class PromotionManager:
+    """High-level promotion lifecycle manager.
+
+    Manages the full promotion lifecycle including:
+    - State transition validation
+    - Promotion history tracking
+    - Batch promotion operations
+    - Criteria configuration per transition type
+    """
+
+    def __init__(
+        self,
+        criteria: PromotionCriteria | None = None,
+        registry_api_url: str = "http://localhost:8080",
+    ) -> None:
+        """Initialize the promotion manager.
+
+        Args:
+            criteria: Default promotion criteria.
+            registry_api_url: URL of the registry API.
+        """
+        self.default_criteria = criteria or PromotionCriteria()
+        self.registry_api_url = registry_api_url
+        self._promoter = AutoPromoter(
+            criteria=self.default_criteria,
+            registry_api_url=registry_api_url,
+        )
+        self._decision_history: list[PromotionDecision] = []
+        self._logger = logger.bind(component="promotion_manager")
+
+    def get_state_from_string(self, state_str: str) -> PromotionState:
+        """Convert string state to PromotionState enum.
+
+        Args:
+            state_str: State string (e.g., "shadow", "paper").
+
+        Returns:
+            Corresponding PromotionState enum value.
+
+        Raises:
+            ValueError: If state string is invalid.
+        """
+        try:
+            return PromotionState(state_str.lower())
+        except ValueError as e:
+            raise ValueError(f"Invalid promotion state: {state_str}") from e
+
+    def validate_transition(
+        self,
+        from_state: PromotionState,
+        to_state: PromotionState,
+    ) -> bool:
+        """Validate if a state transition is allowed.
+
+        Args:
+            from_state: Current state.
+            to_state: Target state.
+
+        Returns:
+            True if transition is valid, False otherwise.
+        """
+        return from_state.can_transition_to(to_state)
+
+    async def evaluate_promotion(
+        self,
+        strategy_id: str,
+        target_state: PromotionState | None = None,
+    ) -> PromotionDecision:
+        """Evaluate a strategy for promotion.
+
+        Args:
+            strategy_id: ID of strategy to evaluate.
+            target_state: Optional target state (defaults to next in lifecycle).
+
+        Returns:
+            PromotionDecision with full evaluation results.
+        """
+        self._logger.info(
+            "Evaluating promotion",
+            strategy_id=strategy_id,
+            target_state=target_state.value if target_state else None,
+        )
+
+        # Get current evaluation from AutoPromoter
+        evaluation = await self._promoter.evaluate_promotion(strategy_id)
+
+        # Convert to PromotionState
+        try:
+            from_state = self.get_state_from_string(evaluation.current_state)
+        except ValueError:
+            from_state = PromotionState.CANDIDATE
+
+        # Determine target state
+        if target_state is None:
+            target_state = self._get_next_state(from_state)
+
+        # Get performance metrics for decision
+        performance = await self._promoter._get_shadow_performance(strategy_id)
+
+        # Create decision
+        decision = PromotionDecision(
+            strategy_id=strategy_id,
+            from_state=from_state,
+            to_state=target_state,
+            approved=evaluation.eligible and self.validate_transition(from_state, target_state),
+            criteria_results=evaluation.criteria_met,
+            performance_metrics={
+                "sharpe": performance.get("sharpe", 0.0),
+                "max_drawdown": performance.get("max_drawdown", 0.0),
+                "num_trades": float(performance.get("num_trades", 0)),
+                "shadow_days": float(performance.get("shadow_days", 0)),
+            },
+            reason=evaluation.message,
+        )
+
+        self._decision_history.append(decision)
+        return decision
+
+    async def promote(
+        self,
+        strategy_id: str,
+        target_state: PromotionState | None = None,
+        auto: bool = True,
+        reviewer_id: str | None = None,
+    ) -> PromotionDecision:
+        """Execute a promotion if criteria are met.
+
+        Args:
+            strategy_id: ID of strategy to promote.
+            target_state: Target state (optional).
+            auto: Whether this is an automatic promotion.
+            reviewer_id: Optional reviewer ID for manual promotions.
+
+        Returns:
+            PromotionDecision with result.
+        """
+        decision = await self.evaluate_promotion(strategy_id, target_state)
+        decision.auto_promoted = auto
+        decision.reviewer_id = reviewer_id
+
+        if not decision.approved:
+            self._logger.warning(
+                "Promotion not approved",
+                strategy_id=strategy_id,
+                reason=decision.reason,
+            )
+            return decision
+
+        # Execute promotion via AutoPromoter
+        success = await self._promoter._call_registry_promote(
+            strategy_id,
+            decision.to_state.value,
+        )
+
+        if not success:
+            decision.approved = False
+            decision.reason = "Registry API promotion failed"
+            self._logger.error(
+                "Promotion execution failed",
+                strategy_id=strategy_id,
+            )
+        else:
+            self._logger.info(
+                "Promotion executed",
+                strategy_id=strategy_id,
+                from_state=decision.from_state.value,
+                to_state=decision.to_state.value,
+            )
+
+        return decision
+
+    async def batch_evaluate(
+        self,
+        from_state: PromotionState = PromotionState.SHADOW,
+    ) -> list[PromotionDecision]:
+        """Evaluate all strategies in a given state for promotion.
+
+        Args:
+            from_state: State to filter strategies by.
+
+        Returns:
+            List of PromotionDecision for each strategy.
+        """
+        self._logger.info("Batch evaluating strategies", from_state=from_state.value)
+
+        evaluations = await self._promoter.check_all_candidates()
+        decisions: list[PromotionDecision] = []
+
+        for eval_result in evaluations:
+            try:
+                current_state = self.get_state_from_string(eval_result.current_state)
+            except ValueError:
+                continue
+
+            if current_state != from_state:
+                continue
+
+            # Get performance for this strategy
+            performance = await self._promoter._get_shadow_performance(eval_result.strategy_id)
+
+            target_state = self._get_next_state(current_state)
+            decision = PromotionDecision(
+                strategy_id=eval_result.strategy_id,
+                from_state=current_state,
+                to_state=target_state,
+                approved=eval_result.eligible,
+                criteria_results=eval_result.criteria_met,
+                performance_metrics={
+                    "sharpe": performance.get("sharpe", 0.0),
+                    "max_drawdown": performance.get("max_drawdown", 0.0),
+                    "num_trades": float(performance.get("num_trades", 0)),
+                    "shadow_days": float(performance.get("shadow_days", 0)),
+                },
+                reason=eval_result.message,
+            )
+            decisions.append(decision)
+            self._decision_history.append(decision)
+
+        self._logger.info(
+            "Batch evaluation complete",
+            total=len(decisions),
+            approved=sum(1 for d in decisions if d.approved),
+        )
+
+        return decisions
+
+    async def batch_promote(
+        self,
+        from_state: PromotionState = PromotionState.SHADOW,
+        max_promotions: int | None = None,
+    ) -> list[PromotionDecision]:
+        """Promote all eligible strategies from a given state.
+
+        Args:
+            from_state: State to filter strategies by.
+            max_promotions: Maximum number of promotions to execute.
+
+        Returns:
+            List of PromotionDecision for executed promotions.
+        """
+        decisions = await self.batch_evaluate(from_state)
+        approved = [d for d in decisions if d.approved]
+
+        if max_promotions is not None:
+            approved = approved[:max_promotions]
+
+        results: list[PromotionDecision] = []
+        for decision in approved:
+            result = await self.promote(
+                decision.strategy_id,
+                decision.to_state,
+                auto=True,
+            )
+            results.append(result)
+
+        return results
+
+    def get_decision_history(
+        self,
+        strategy_id: str | None = None,
+        limit: int | None = None,
+    ) -> list[PromotionDecision]:
+        """Get promotion decision history.
+
+        Args:
+            strategy_id: Filter by strategy ID (optional).
+            limit: Maximum number of decisions to return.
+
+        Returns:
+            List of PromotionDecision objects.
+        """
+        history = self._decision_history
+        if strategy_id is not None:
+            history = [d for d in history if d.strategy_id == strategy_id]
+        if limit is not None:
+            history = history[-limit:]
+        return history
+
+    def clear_history(self) -> None:
+        """Clear the decision history."""
+        self._decision_history.clear()
+
+    def _get_next_state(self, current: PromotionState) -> PromotionState:
+        """Get the next state in the promotion lifecycle.
+
+        Args:
+            current: Current state.
+
+        Returns:
+            Next promotion state.
+        """
+        state_order = [
+            PromotionState.CANDIDATE,
+            PromotionState.SHADOW,
+            PromotionState.PAPER,
+            PromotionState.LIVE,
+        ]
+        try:
+            idx = state_order.index(current)
+            if idx < len(state_order) - 1:
+                return state_order[idx + 1]
+        except ValueError:
+            pass
+        return PromotionState.RETIRED
+
+    async def close(self) -> None:
+        """Close resources."""
+        await self._promoter.close()
+
+
 __all__ = [
     "AutoPromoter",
     "PromotionCriteria",
+    "PromotionDecision",
     "PromotionEvaluation",
+    "PromotionManager",
+    "PromotionState",
 ]

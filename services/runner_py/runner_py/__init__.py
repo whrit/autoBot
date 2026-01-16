@@ -30,7 +30,14 @@ from runner_py.orchestrator import (
 from runner_py.paper import PaperConfig, PaperExecutor, PaperFill
 
 # Promotion Manager (T6.06)
-from runner_py.promotion import AutoPromoter, PromotionCriteria, PromotionEvaluation
+from runner_py.promotion import (
+    AutoPromoter,
+    PromotionCriteria,
+    PromotionDecision,
+    PromotionEvaluation,
+    PromotionManager,
+    PromotionState,
+)
 
 # Shadow Execution (T6.01) and Signal Logging (T6.02)
 from runner_py.shadow import ShadowConfig, ShadowExecutor
@@ -90,7 +97,10 @@ __all__ = [
     # Promotion Manager (T6.06)
     "AutoPromoter",
     "PromotionCriteria",
+    "PromotionDecision",
     "PromotionEvaluation",
+    "PromotionManager",
+    "PromotionState",
     # Validation (T6.07)
     "BehaviorValidator",
     "ValidationConfig",

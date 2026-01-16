@@ -8,23 +8,30 @@ Tests cover:
 - Phase transitions (pre-market, trading, post-market)
 - Strategy loading from registry
 - Daily orchestration loop
+- Scheduled task management (TaskType, ScheduleFrequency, ScheduledTask)
+- AutonomousOrchestrator functionality
 """
 
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from runner_py.orchestrator import (
-    Orchestrator,
+    AutonomousOrchestrator,
     OrchestrationConfig,
     OrchestrationMode,
     OrchestrationPhase,
     OrchestrationState,
+    Orchestrator,
+    OrchestratorConfig,
+    ScheduledTask,
+    ScheduleFrequency,
+    TaskType,
 )
 
 if TYPE_CHECKING:
@@ -220,17 +227,20 @@ class TestOrchestrator:
             {"id": 2, "name": "strategy_2", "state": "paper"},
         ]
 
-        with patch.object(orchestrator, "_http_client") as mock_client:
-            mock_response = AsyncMock()
-            mock_response.json.return_value = {"items": mock_strategies, "total": 2}
-            mock_response.raise_for_status = MagicMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
+        # Directly assign the mock client (not using patch.object)
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"items": mock_strategies, "total": 2}
+        mock_response.raise_for_status = MagicMock()
 
-            strategies = await orchestrator._load_active_strategies()
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        orchestrator._http_client = mock_client
 
-            assert len(strategies) == 2
-            assert strategies[0]["name"] == "strategy_1"
-            assert strategies[1]["name"] == "strategy_2"
+        strategies = await orchestrator._load_active_strategies()
+
+        assert len(strategies) == 2
+        assert strategies[0]["name"] == "strategy_1"
+        assert strategies[1]["name"] == "strategy_2"
 
     async def test_load_active_strategies_filters_by_state(self) -> None:
         """Test that only shadow/paper strategies are loaded."""
@@ -245,21 +255,24 @@ class TestOrchestrator:
             {"id": 4, "name": "retired_strat", "state": "retired"},
         ]
 
-        with patch.object(orchestrator, "_http_client") as mock_client:
-            mock_response = AsyncMock()
-            mock_response.json.return_value = {"items": mock_strategies, "total": 4}
-            mock_response.raise_for_status = MagicMock()
-            mock_client.get = AsyncMock(return_value=mock_response)
+        # Directly assign the mock client
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"items": mock_strategies, "total": 4}
+        mock_response.raise_for_status = MagicMock()
 
-            strategies = await orchestrator._load_active_strategies()
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        orchestrator._http_client = mock_client
 
-            # Only shadow and paper should be included
-            assert len(strategies) == 2
-            states = {s["state"] for s in strategies}
-            assert "shadow" in states
-            assert "paper" in states
-            assert "candidate" not in states
-            assert "retired" not in states
+        strategies = await orchestrator._load_active_strategies()
+
+        # Only shadow and paper should be included
+        assert len(strategies) == 2
+        states = {s["state"] for s in strategies}
+        assert "shadow" in states
+        assert "paper" in states
+        assert "candidate" not in states
+        assert "retired" not in states
 
     async def test_pre_market_phase(self) -> None:
         """Test pre-market phase execution."""
@@ -317,7 +330,7 @@ class TestOrchestrator:
         phases_visited: list[OrchestrationPhase] = []
 
         original_pre_market = orchestrator._pre_market_phase
-        original_trading = orchestrator._trading_phase
+        _ = orchestrator._trading_phase  # Stored for reference only
         original_post_market = orchestrator._post_market_phase
 
         async def mock_pre_market() -> None:
@@ -421,3 +434,469 @@ class TestOrchestratorIntegration:
 
             state = orchestrator.get_state()
             assert state.current_phase == OrchestrationPhase.POST_MARKET
+
+
+# =============================================================================
+# T6.05 Scheduled Task Tests
+# =============================================================================
+
+
+class TestTaskType:
+    """Tests for TaskType enum."""
+
+    def test_task_type_values(self) -> None:
+        """Test all task type values."""
+        assert TaskType.FEATURE_REFRESH.value == "feature_refresh"
+        assert TaskType.SIGNAL_GENERATION.value == "signal_generation"
+        assert TaskType.SHADOW_EXECUTION.value == "shadow_execution"
+        assert TaskType.PAPER_EXECUTION.value == "paper_execution"
+        assert TaskType.PERFORMANCE_EVAL.value == "performance_eval"
+        assert TaskType.PROMOTION_CHECK.value == "promotion_check"
+        assert TaskType.DATA_SYNC.value == "data_sync"
+
+    def test_task_type_is_string_enum(self) -> None:
+        """Test that TaskType is a string enum."""
+        assert isinstance(TaskType.FEATURE_REFRESH, str)
+        assert TaskType.FEATURE_REFRESH == "feature_refresh"
+
+
+class TestScheduleFrequency:
+    """Tests for ScheduleFrequency enum."""
+
+    def test_frequency_values(self) -> None:
+        """Test all frequency values."""
+        assert ScheduleFrequency.MINUTELY.value == "minutely"
+        assert ScheduleFrequency.HOURLY.value == "hourly"
+        assert ScheduleFrequency.DAILY.value == "daily"
+        assert ScheduleFrequency.WEEKLY.value == "weekly"
+
+    def test_frequency_is_string_enum(self) -> None:
+        """Test that ScheduleFrequency is a string enum."""
+        assert isinstance(ScheduleFrequency.DAILY, str)
+        assert ScheduleFrequency.DAILY == "daily"
+
+
+class TestScheduledTask:
+    """Tests for ScheduledTask dataclass."""
+
+    def test_scheduled_task_creation(self) -> None:
+        """Test creating a scheduled task."""
+        task = ScheduledTask(
+            task_type=TaskType.FEATURE_REFRESH,
+            frequency=ScheduleFrequency.MINUTELY,
+        )
+
+        assert task.task_type == TaskType.FEATURE_REFRESH
+        assert task.frequency == ScheduleFrequency.MINUTELY
+        assert task.time_of_day is None
+        assert task.day_of_week is None
+        assert task.enabled is True
+        assert task.last_run is None
+        assert task.next_run is None
+        assert task.handler is None
+
+    def test_scheduled_task_with_time(self) -> None:
+        """Test creating a scheduled task with time_of_day."""
+        eval_time = time(16, 30)
+        task = ScheduledTask(
+            task_type=TaskType.PERFORMANCE_EVAL,
+            frequency=ScheduleFrequency.DAILY,
+            time_of_day=eval_time,
+        )
+
+        assert task.time_of_day == eval_time
+        assert task.frequency == ScheduleFrequency.DAILY
+
+    def test_scheduled_task_weekly_with_day(self) -> None:
+        """Test creating a weekly scheduled task with day_of_week."""
+        task = ScheduledTask(
+            task_type=TaskType.PROMOTION_CHECK,
+            frequency=ScheduleFrequency.WEEKLY,
+            time_of_day=time(18, 0),
+            day_of_week=6,  # Sunday
+        )
+
+        assert task.day_of_week == 6
+        assert task.frequency == ScheduleFrequency.WEEKLY
+
+    def test_scheduled_task_with_handler(self) -> None:
+        """Test creating a scheduled task with a handler."""
+        def my_handler() -> None:
+            pass
+
+        task = ScheduledTask(
+            task_type=TaskType.DATA_SYNC,
+            frequency=ScheduleFrequency.HOURLY,
+            handler=my_handler,
+        )
+
+        assert task.handler == my_handler
+
+    def test_scheduled_task_disabled(self) -> None:
+        """Test creating a disabled scheduled task."""
+        task = ScheduledTask(
+            task_type=TaskType.SHADOW_EXECUTION,
+            frequency=ScheduleFrequency.MINUTELY,
+            enabled=False,
+        )
+
+        assert task.enabled is False
+
+
+class TestOrchestratorConfig:
+    """Tests for OrchestratorConfig dataclass."""
+
+    def test_default_config(self) -> None:
+        """Test default OrchestratorConfig values."""
+        config = OrchestratorConfig()
+
+        assert config.market_open == time(9, 30)
+        assert config.market_close == time(16, 0)
+        assert config.feature_refresh_interval_minutes == 5
+        assert config.signal_generation_interval_minutes == 1
+        assert config.daily_eval_time == time(16, 30)
+        assert config.weekly_optimization_day == 6  # Sunday
+        assert config.weekly_optimization_time == time(18, 0)
+        assert config.promotion_check_days == 7
+
+    def test_custom_config(self) -> None:
+        """Test custom OrchestratorConfig values."""
+        config = OrchestratorConfig(
+            market_open=time(10, 0),
+            market_close=time(15, 0),
+            feature_refresh_interval_minutes=10,
+            signal_generation_interval_minutes=5,
+            daily_eval_time=time(15, 30),
+            weekly_optimization_day=0,  # Monday
+            weekly_optimization_time=time(20, 0),
+            promotion_check_days=14,
+        )
+
+        assert config.market_open == time(10, 0)
+        assert config.market_close == time(15, 0)
+        assert config.feature_refresh_interval_minutes == 10
+        assert config.signal_generation_interval_minutes == 5
+        assert config.daily_eval_time == time(15, 30)
+        assert config.weekly_optimization_day == 0
+        assert config.weekly_optimization_time == time(20, 0)
+        assert config.promotion_check_days == 14
+
+
+class TestAutonomousOrchestrator:
+    """Tests for AutonomousOrchestrator class."""
+
+    def test_init(self) -> None:
+        """Test AutonomousOrchestrator initialization."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        assert orchestrator.config == config
+        assert orchestrator._running is False
+        assert len(orchestrator._tasks) == 0
+
+    def test_register_task(self) -> None:
+        """Test registering a task with the orchestrator."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        async def my_handler() -> None:
+            pass
+
+        orchestrator.register_task(
+            task_type=TaskType.FEATURE_REFRESH,
+            handler=my_handler,
+            frequency=ScheduleFrequency.MINUTELY,
+        )
+
+        assert TaskType.FEATURE_REFRESH in orchestrator._tasks
+        task = orchestrator._tasks[TaskType.FEATURE_REFRESH]
+        assert task.handler == my_handler
+        assert task.frequency == ScheduleFrequency.MINUTELY
+
+    def test_register_task_with_time(self) -> None:
+        """Test registering a daily task with time_of_day."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        async def eval_handler() -> None:
+            pass
+
+        orchestrator.register_task(
+            task_type=TaskType.PERFORMANCE_EVAL,
+            handler=eval_handler,
+            frequency=ScheduleFrequency.DAILY,
+            time_of_day=time(16, 30),
+        )
+
+        task = orchestrator._tasks[TaskType.PERFORMANCE_EVAL]
+        assert task.time_of_day == time(16, 30)
+
+    def test_register_weekly_task(self) -> None:
+        """Test registering a weekly task with day_of_week."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        async def promotion_handler() -> None:
+            pass
+
+        orchestrator.register_task(
+            task_type=TaskType.PROMOTION_CHECK,
+            handler=promotion_handler,
+            frequency=ScheduleFrequency.WEEKLY,
+            time_of_day=time(18, 0),
+            day_of_week=6,  # Sunday
+        )
+
+        task = orchestrator._tasks[TaskType.PROMOTION_CHECK]
+        assert task.day_of_week == 6
+        assert task.time_of_day == time(18, 0)
+
+    def test_schedule_default_tasks(self) -> None:
+        """Test scheduling default autonomous tasks."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        orchestrator.schedule_default_tasks()
+
+        # Should have 4 default tasks
+        assert len(orchestrator._tasks) == 4
+        assert TaskType.FEATURE_REFRESH in orchestrator._tasks
+        assert TaskType.SIGNAL_GENERATION in orchestrator._tasks
+        assert TaskType.PERFORMANCE_EVAL in orchestrator._tasks
+        assert TaskType.PROMOTION_CHECK in orchestrator._tasks
+
+    def test_is_market_hours_during_trading(self) -> None:
+        """Test market hours detection during trading hours."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        # Weekday during market hours (10:00)
+        with patch("runner_py.orchestrator.datetime") as mock_datetime:
+            mock_datetime.now.return_value = datetime(2024, 1, 15, 10, 0, 0)  # Tuesday
+            assert orchestrator.is_market_hours() is True
+
+    def test_is_market_hours_before_open(self) -> None:
+        """Test market hours detection before market open."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        # Weekday before market open (8:00)
+        with patch("runner_py.orchestrator.datetime") as mock_datetime:
+            mock_datetime.now.return_value = datetime(2024, 1, 15, 8, 0, 0)  # Tuesday
+            assert orchestrator.is_market_hours() is False
+
+    def test_is_market_hours_weekend(self) -> None:
+        """Test market hours detection on weekend."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        # Saturday during normal trading hours
+        with patch("runner_py.orchestrator.datetime") as mock_datetime:
+            mock_datetime.now.return_value = datetime(2024, 1, 13, 12, 0, 0)  # Saturday
+            assert orchestrator.is_market_hours() is False
+
+    def test_get_task_status(self) -> None:
+        """Test getting status of scheduled tasks."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+        orchestrator.schedule_default_tasks()
+
+        status = orchestrator.get_task_status()
+
+        assert "running" in status
+        assert "tasks" in status
+        assert "market_hours" in status
+        assert status["running"] is False
+        assert len(status["tasks"]) == 4
+
+    def test_is_task_due_minutely_first_run(self) -> None:
+        """Test minutely task is due on first run."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        task = ScheduledTask(
+            task_type=TaskType.FEATURE_REFRESH,
+            frequency=ScheduleFrequency.MINUTELY,
+        )
+
+        now = datetime.now()
+        assert orchestrator._is_task_due(task, now) is True
+
+    def test_is_task_due_minutely_after_run(self) -> None:
+        """Test minutely task is due after 1 minute."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        now = datetime.now()
+        task = ScheduledTask(
+            task_type=TaskType.FEATURE_REFRESH,
+            frequency=ScheduleFrequency.MINUTELY,
+            last_run=now - timedelta(minutes=2),
+        )
+
+        assert orchestrator._is_task_due(task, now) is True
+
+    def test_is_task_due_minutely_too_soon(self) -> None:
+        """Test minutely task is not due before 1 minute."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        now = datetime.now()
+        task = ScheduledTask(
+            task_type=TaskType.FEATURE_REFRESH,
+            frequency=ScheduleFrequency.MINUTELY,
+            last_run=now - timedelta(seconds=30),
+        )
+
+        assert orchestrator._is_task_due(task, now) is False
+
+    def test_is_task_due_hourly(self) -> None:
+        """Test hourly task due detection."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        now = datetime.now()
+        task = ScheduledTask(
+            task_type=TaskType.DATA_SYNC,
+            frequency=ScheduleFrequency.HOURLY,
+            last_run=now - timedelta(hours=2),
+        )
+
+        assert orchestrator._is_task_due(task, now) is True
+
+    def test_is_task_due_daily_with_time(self) -> None:
+        """Test daily task with specific time_of_day."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        eval_time = time(16, 30)
+        yesterday = datetime(2024, 1, 14, 16, 30, 0)
+        today_after_time = datetime(2024, 1, 15, 17, 0, 0)
+
+        task = ScheduledTask(
+            task_type=TaskType.PERFORMANCE_EVAL,
+            frequency=ScheduleFrequency.DAILY,
+            time_of_day=eval_time,
+            last_run=yesterday,
+        )
+
+        assert orchestrator._is_task_due(task, today_after_time) is True
+
+    def test_is_task_due_disabled_task(self) -> None:
+        """Test disabled task is never due."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        task = ScheduledTask(
+            task_type=TaskType.FEATURE_REFRESH,
+            frequency=ScheduleFrequency.MINUTELY,
+            enabled=False,
+        )
+
+        now = datetime.now()
+        assert orchestrator._is_task_due(task, now) is False
+
+    async def test_execute_task_sync_handler(self) -> None:
+        """Test executing a task with sync handler."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        executed = []
+
+        def sync_handler() -> None:
+            executed.append(True)
+
+        task = ScheduledTask(
+            task_type=TaskType.DATA_SYNC,
+            frequency=ScheduleFrequency.HOURLY,
+            handler=sync_handler,
+        )
+
+        await orchestrator._execute_task(task)
+
+        assert len(executed) == 1
+        assert task.last_run is not None
+
+    async def test_execute_task_async_handler(self) -> None:
+        """Test executing a task with async handler."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        executed = []
+
+        async def async_handler() -> None:
+            executed.append(True)
+
+        task = ScheduledTask(
+            task_type=TaskType.FEATURE_REFRESH,
+            frequency=ScheduleFrequency.MINUTELY,
+            handler=async_handler,
+        )
+
+        await orchestrator._execute_task(task)
+
+        assert len(executed) == 1
+        assert task.last_run is not None
+
+    async def test_execute_task_no_handler(self) -> None:
+        """Test executing a task with no handler does nothing."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        task = ScheduledTask(
+            task_type=TaskType.DATA_SYNC,
+            frequency=ScheduleFrequency.HOURLY,
+            handler=None,
+        )
+
+        # Should not raise
+        await orchestrator._execute_task(task)
+        assert task.last_run is None
+
+    async def test_execute_task_handler_error(self) -> None:
+        """Test that handler errors are caught and logged."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        async def failing_handler() -> None:
+            raise ValueError("Handler failed")
+
+        task = ScheduledTask(
+            task_type=TaskType.FEATURE_REFRESH,
+            frequency=ScheduleFrequency.MINUTELY,
+            handler=failing_handler,
+        )
+
+        # Should not raise
+        await orchestrator._execute_task(task)
+        # last_run should NOT be updated on failure
+        assert task.last_run is None
+
+    async def test_start_stop_lifecycle(self) -> None:
+        """Test starting and stopping the orchestrator."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        # Start in background
+        start_task = asyncio.create_task(orchestrator.start())
+
+        # Give it a moment to start
+        await asyncio.sleep(0.05)
+        assert orchestrator._running is True
+
+        # Stop the orchestrator
+        await orchestrator.stop()
+
+        # Wait for clean shutdown
+        await asyncio.wait_for(start_task, timeout=1.0)
+
+        assert orchestrator._running is False
+
+    async def test_stop_without_start(self) -> None:
+        """Test stopping orchestrator that was never started."""
+        config = OrchestratorConfig()
+        orchestrator = AutonomousOrchestrator(config)
+
+        # Should not raise
+        await orchestrator.stop()
+        assert orchestrator._running is False
