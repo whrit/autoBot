@@ -7,15 +7,22 @@ Tests cover:
 - T2.03: AsOfJoiner (point-in-time correct joins)
 - T2.04: DecisionFrameBuilder (multi-timeframe matrix)
 - T2.05: IncrementalProcessor (incremental updates)
+- T2.06: Schema Versioning Persistence
 """
 
+import tempfile
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import polars as pl
 import pytest
 
 from feature_builder_py.bars import StandardBarBuilder
-from feature_builder_py.decision_frame import DecisionFrameBuilder
+from feature_builder_py.decision_frame import (
+    DecisionFrameBuilder,
+    get_schema_version,
+    validate_schema_version,
+)
 from feature_builder_py.incremental import IncrementalProcessor
 from feature_builder_py.joins import AsOfJoiner
 from feature_builder_py.micro_bars import MicrostructureBarBuilder
@@ -338,7 +345,7 @@ class TestMicrostructureBarBuilder:
         expected_columns = {
             "symbol", "bar_start", "bar_end", "vwap", "midprice",
             "microprice", "spread", "bid_size", "ask_size",
-            "quote_imbalance", "trade_volume", "realized_vol"
+            "quote_imbalance", "trade_imbalance", "trade_volume", "realized_vol"
         }
         assert set(bars.columns) == expected_columns
 
@@ -404,6 +411,128 @@ class TestMicrostructureBarBuilder:
 
         # Realized vol should be non-negative
         assert all(bars["realized_vol"] >= 0)
+
+    def test_trade_imbalance_in_schema(
+        self, sample_trades: pl.DataFrame, sample_quotes: pl.DataFrame
+    ) -> None:
+        """Test that trade_imbalance is included in output schema."""
+        builder = MicrostructureBarBuilder(granularity="30s")
+        bars = builder.build(sample_trades, sample_quotes, symbol="SPY")
+        assert "trade_imbalance" in bars.columns
+
+    def test_trade_imbalance_calculation(
+        self, sample_trades: pl.DataFrame, sample_quotes: pl.DataFrame
+    ) -> None:
+        """Test trade_imbalance is calculated correctly."""
+        builder = MicrostructureBarBuilder(granularity="30s")
+        bars = builder.build(sample_trades, sample_quotes, symbol="SPY")
+        assert all(bars["trade_imbalance"] >= -1)
+        assert all(bars["trade_imbalance"] <= 1)
+
+    def test_trade_imbalance_zero_volume_handling(self) -> None:
+        """Test trade_imbalance handles zero total volume."""
+        builder = MicrostructureBarBuilder(granularity="30s")
+        base_time = datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)
+        empty_trades = pl.DataFrame({
+            "ts_event": pl.Series([], dtype=pl.Datetime("us", "UTC")),
+            "ts_recv": pl.Series([], dtype=pl.Datetime("us", "UTC")),
+            "price": pl.Series([], dtype=pl.Float64),
+            "size": pl.Series([], dtype=pl.Float64),
+            "exchange": pl.Series([], dtype=pl.String),
+            "conditions": pl.Series([], dtype=pl.String),
+        })
+        quotes = pl.DataFrame({
+            "ts_event": [base_time],
+            "ts_recv": [base_time + timedelta(microseconds=50)],
+            "bid_price": [100.0],
+            "bid_size": [500.0],
+            "ask_price": [100.02],
+            "ask_size": [400.0],
+            "bid_exchange": ["XNYS"],
+            "ask_exchange": ["XNYS"],
+            "conditions": [None],
+        })
+        bars = builder.build(empty_trades, quotes, symbol="SPY")
+        assert all(bars["trade_imbalance"] == 0.0)
+
+    def test_trade_imbalance_all_buys(self) -> None:
+        """Test trade_imbalance when all trades are buys (upticks)."""
+        builder = MicrostructureBarBuilder(granularity="30s")
+        base_time = datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)
+        trades = pl.DataFrame({
+            "ts_event": [base_time + timedelta(seconds=i) for i in range(10)],
+            "ts_recv": [base_time + timedelta(seconds=i, microseconds=100) for i in range(10)],
+            "price": [100.0 + i * 0.01 for i in range(10)],
+            "size": [100.0] * 10,
+            "exchange": ["XNYS"] * 10,
+            "conditions": [None] * 10,
+        })
+        quotes = pl.DataFrame({
+            "ts_event": [base_time],
+            "ts_recv": [base_time + timedelta(microseconds=50)],
+            "bid_price": [99.99],
+            "bid_size": [500.0],
+            "ask_price": [100.01],
+            "ask_size": [400.0],
+            "bid_exchange": ["XNYS"],
+            "ask_exchange": ["XNYS"],
+            "conditions": [None],
+        })
+        bars = builder.build(trades, quotes, symbol="SPY")
+        assert bars["trade_imbalance"][0] > 0.5
+
+    def test_trade_imbalance_all_sells(self) -> None:
+        """Test trade_imbalance when all trades are sells (downticks)."""
+        builder = MicrostructureBarBuilder(granularity="30s")
+        base_time = datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)
+        trades = pl.DataFrame({
+            "ts_event": [base_time + timedelta(seconds=i) for i in range(10)],
+            "ts_recv": [base_time + timedelta(seconds=i, microseconds=100) for i in range(10)],
+            "price": [100.0 - i * 0.01 for i in range(10)],
+            "size": [100.0] * 10,
+            "exchange": ["XNYS"] * 10,
+            "conditions": [None] * 10,
+        })
+        quotes = pl.DataFrame({
+            "ts_event": [base_time],
+            "ts_recv": [base_time + timedelta(microseconds=50)],
+            "bid_price": [99.99],
+            "bid_size": [500.0],
+            "ask_price": [100.01],
+            "ask_size": [400.0],
+            "bid_exchange": ["XNYS"],
+            "ask_exchange": ["XNYS"],
+            "conditions": [None],
+        })
+        bars = builder.build(trades, quotes, symbol="SPY")
+        assert bars["trade_imbalance"][0] < -0.5
+
+    def test_trade_imbalance_mixed_direction(self) -> None:
+        """Test trade_imbalance with alternating buy/sell pattern."""
+        builder = MicrostructureBarBuilder(granularity="30s")
+        base_time = datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)
+        prices = [100.0, 100.01, 100.0, 100.01, 100.0, 100.01, 100.0, 100.01, 100.0, 100.01]
+        trades = pl.DataFrame({
+            "ts_event": [base_time + timedelta(seconds=i) for i in range(10)],
+            "ts_recv": [base_time + timedelta(seconds=i, microseconds=100) for i in range(10)],
+            "price": prices,
+            "size": [100.0] * 10,
+            "exchange": ["XNYS"] * 10,
+            "conditions": [None] * 10,
+        })
+        quotes = pl.DataFrame({
+            "ts_event": [base_time],
+            "ts_recv": [base_time + timedelta(microseconds=50)],
+            "bid_price": [99.99],
+            "bid_size": [500.0],
+            "ask_price": [100.01],
+            "ask_size": [400.0],
+            "bid_exchange": ["XNYS"],
+            "ask_exchange": ["XNYS"],
+            "conditions": [None],
+        })
+        bars = builder.build(trades, quotes, symbol="SPY")
+        assert abs(bars["trade_imbalance"][0]) < 0.5
 
     def test_invalid_granularity_raises(self) -> None:
         """Test that invalid granularity raises ValueError."""
@@ -814,6 +943,235 @@ class TestIncrementalProcessor:
         assert spy_state is not None
         assert qqq_state is not None
         assert spy_state != qqq_state or spy_state["symbol"] != qqq_state["symbol"]
+
+
+# =============================================================================
+# T2.06: SCHEMA VERSIONING PERSISTENCE TESTS
+# =============================================================================
+
+
+class TestSchemaVersioningPersistence:
+    """Tests for schema versioning persistence (T2.06).
+
+    These tests verify that schema_version is properly persisted
+    when saving decision frames to Parquet files and can be
+    retrieved when loading them back.
+    """
+
+    def test_schema_version_included_in_output(
+        self,
+        sample_1m_bars: pl.DataFrame,
+        sample_5m_bars: pl.DataFrame,
+        sample_micro_bars: pl.DataFrame,
+    ) -> None:
+        """Test that schema version is included in output DataFrame."""
+        builder = DecisionFrameBuilder(schema_version="2.1.0")
+
+        base_time = datetime(2024, 1, 15, 9, 40, 0, tzinfo=UTC)
+        decision_times = pl.DataFrame({"decision_ts": [base_time]})
+
+        frame = builder.build(
+            decision_times=decision_times,
+            micro_bars_30s=sample_micro_bars,
+            bars_1m=sample_1m_bars,
+            bars_5m=sample_5m_bars,
+            symbol="SPY",
+        )
+
+        # Schema version should be accessible from the frame as a column
+        assert builder.schema_version == "2.1.0"
+        assert "schema_version" in frame.columns
+        assert frame["schema_version"][0] == "2.1.0"
+
+    def test_schema_version_persisted_to_parquet(
+        self,
+        sample_1m_bars: pl.DataFrame,
+        sample_5m_bars: pl.DataFrame,
+        sample_micro_bars: pl.DataFrame,
+    ) -> None:
+        """Test schema version is persisted when saving to Parquet."""
+        builder = DecisionFrameBuilder(schema_version="2.0.0")
+
+        base_time = datetime(2024, 1, 15, 9, 40, 0, tzinfo=UTC)
+        decision_times = pl.DataFrame({"decision_ts": [base_time]})
+
+        frame = builder.build(
+            decision_times=decision_times,
+            micro_bars_30s=sample_micro_bars,
+            bars_1m=sample_1m_bars,
+            bars_5m=sample_5m_bars,
+            symbol="SPY",
+        )
+
+        # Save to Parquet and read back
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "decision_frame.parquet"
+            builder.write_parquet(frame, path)
+
+            # Read back schema version
+            loaded_version = get_schema_version(path)
+            assert loaded_version == "2.0.0"
+
+    def test_schema_version_retrievable_after_load(
+        self,
+        sample_1m_bars: pl.DataFrame,
+        sample_5m_bars: pl.DataFrame,
+        sample_micro_bars: pl.DataFrame,
+    ) -> None:
+        """Test schema version is retrievable after loading from Parquet."""
+        builder = DecisionFrameBuilder(schema_version="1.5.0")
+
+        base_time = datetime(2024, 1, 15, 9, 40, 0, tzinfo=UTC)
+        decision_times = pl.DataFrame({"decision_ts": [base_time]})
+
+        frame = builder.build(
+            decision_times=decision_times,
+            micro_bars_30s=sample_micro_bars,
+            bars_1m=sample_1m_bars,
+            bars_5m=sample_5m_bars,
+            symbol="SPY",
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "decision_frame.parquet"
+            builder.write_parquet(frame, path)
+
+            # Load the DataFrame and get version
+            loaded_df = pl.read_parquet(path)
+            loaded_version = get_schema_version(path)
+
+            assert loaded_version == "1.5.0"
+            assert loaded_df is not None
+
+    def test_get_schema_version_from_dataframe_with_column(self) -> None:
+        """Test get_schema_version from DataFrame with schema_version column."""
+        df = pl.DataFrame({
+            "value": [1, 2, 3],
+            "schema_version": ["1.0.0", "1.0.0", "1.0.0"],
+        })
+
+        version = get_schema_version(df)
+        assert version == "1.0.0"
+
+    def test_get_schema_version_missing_returns_unknown(self) -> None:
+        """Test get_schema_version returns 'unknown' when version not found."""
+        df = pl.DataFrame({"value": [1, 2, 3]})
+        version = get_schema_version(df)
+        assert version == "unknown"
+
+    def test_validate_schema_version_matching(
+        self,
+        sample_1m_bars: pl.DataFrame,
+        sample_5m_bars: pl.DataFrame,
+        sample_micro_bars: pl.DataFrame,
+    ) -> None:
+        """Test validate_schema_version returns True when versions match."""
+        builder = DecisionFrameBuilder(schema_version="1.0.0")
+
+        base_time = datetime(2024, 1, 15, 9, 40, 0, tzinfo=UTC)
+        decision_times = pl.DataFrame({"decision_ts": [base_time]})
+
+        frame = builder.build(
+            decision_times=decision_times,
+            micro_bars_30s=sample_micro_bars,
+            bars_1m=sample_1m_bars,
+            bars_5m=sample_5m_bars,
+            symbol="SPY",
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "decision_frame.parquet"
+            builder.write_parquet(frame, path)
+
+            assert validate_schema_version(path, "1.0.0") is True
+
+    def test_validate_schema_version_mismatch(
+        self,
+        sample_1m_bars: pl.DataFrame,
+        sample_5m_bars: pl.DataFrame,
+        sample_micro_bars: pl.DataFrame,
+    ) -> None:
+        """Test validate_schema_version returns False when versions don't match."""
+        builder = DecisionFrameBuilder(schema_version="1.0.0")
+
+        base_time = datetime(2024, 1, 15, 9, 40, 0, tzinfo=UTC)
+        decision_times = pl.DataFrame({"decision_ts": [base_time]})
+
+        frame = builder.build(
+            decision_times=decision_times,
+            micro_bars_30s=sample_micro_bars,
+            bars_1m=sample_1m_bars,
+            bars_5m=sample_5m_bars,
+            symbol="SPY",
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "decision_frame.parquet"
+            builder.write_parquet(frame, path)
+
+            assert validate_schema_version(path, "2.0.0") is False
+
+    def test_schema_version_with_empty_dataframe(self) -> None:
+        """Test schema versioning works with empty DataFrames."""
+        builder = DecisionFrameBuilder(schema_version="1.0.0")
+
+        decision_times = pl.DataFrame({
+            "decision_ts": pl.Series([], dtype=pl.Datetime("us", "UTC"))
+        })
+
+        frame = builder.build(
+            decision_times=decision_times,
+            micro_bars_30s=pl.DataFrame(),
+            bars_1m=pl.DataFrame(),
+            bars_5m=pl.DataFrame(),
+            symbol="SPY",
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "empty_frame.parquet"
+            builder.write_parquet(frame, path)
+
+            loaded_version = get_schema_version(path)
+            assert loaded_version == "1.0.0"
+
+    def test_multiple_versions_different_files(
+        self,
+        sample_1m_bars: pl.DataFrame,
+        sample_5m_bars: pl.DataFrame,
+        sample_micro_bars: pl.DataFrame,
+    ) -> None:
+        """Test different schema versions in different files."""
+        base_time = datetime(2024, 1, 15, 9, 40, 0, tzinfo=UTC)
+        decision_times = pl.DataFrame({"decision_ts": [base_time]})
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create file with v1.0.0
+            builder_v1 = DecisionFrameBuilder(schema_version="1.0.0")
+            frame_v1 = builder_v1.build(
+                decision_times=decision_times,
+                micro_bars_30s=sample_micro_bars,
+                bars_1m=sample_1m_bars,
+                bars_5m=sample_5m_bars,
+                symbol="SPY",
+            )
+            path_v1 = Path(tmpdir) / "frame_v1.parquet"
+            builder_v1.write_parquet(frame_v1, path_v1)
+
+            # Create file with v2.0.0
+            builder_v2 = DecisionFrameBuilder(schema_version="2.0.0")
+            frame_v2 = builder_v2.build(
+                decision_times=decision_times,
+                micro_bars_30s=sample_micro_bars,
+                bars_1m=sample_1m_bars,
+                bars_5m=sample_5m_bars,
+                symbol="SPY",
+            )
+            path_v2 = Path(tmpdir) / "frame_v2.parquet"
+            builder_v2.write_parquet(frame_v2, path_v2)
+
+            # Verify both versions are correctly stored
+            assert get_schema_version(path_v1) == "1.0.0"
+            assert get_schema_version(path_v2) == "2.0.0"
 
 
 # =============================================================================

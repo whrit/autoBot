@@ -400,7 +400,8 @@ class TestArtifactCRUD:
         artifact_id = create_response.json()["id"]
 
         response = client.delete(f"/artifacts/{artifact_id}")
-        assert response.status_code == 204
+        assert response.status_code == 200
+        assert response.json()["deleted"] is True
 
         response = client.get(f"/artifacts/{artifact_id}")
         assert response.status_code == 404

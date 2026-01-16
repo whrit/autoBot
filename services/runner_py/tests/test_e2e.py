@@ -4,11 +4,10 @@ End-to-end integration tests for runner_py (T6.09).
 TDD tests written before implementation.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import numpy as np
 import polars as pl
-import pytest
 
 from runner_py.acceptance import AcceptanceTester
 from runner_py.benchmark import BenchmarkConfig, PerformanceBenchmark
@@ -309,7 +308,7 @@ class TestDataIntegrity:
         original_count = len(sample_shadow_results)
 
         # Process through validation (which shouldn't modify data)
-        validator = BehaviorValidator()
+        BehaviorValidator()
 
         # Data should be preserved
         assert len(sample_shadow_results) == original_count

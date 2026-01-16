@@ -21,6 +21,7 @@ Example:
 from __future__ import annotations
 
 import tempfile
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -94,11 +95,21 @@ class ONNXExporter:
         initial_type = [("input", FloatTensorType([None, n_features]))]
 
         # Convert to ONNX
-        onnx_model = convert_xgboost(
-            model,
-            initial_types=initial_type,
-            target_opset=config.opset_version,
-        )
+        # Suppress onnxmltools boolean->int deprecation warning (issue in onnxmltools library)
+        # The warning "Field onnx.AttributeProto.ints: Expected an int, got a boolean"
+        # is a known issue in onnxmltools when converting XGBoost models.
+        # See: https://github.com/onnx/onnxmltools/issues/692
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Field onnx.AttributeProto.ints.*Expected an int.*got a boolean",
+                category=DeprecationWarning,
+            )
+            onnx_model = convert_xgboost(
+                model,
+                initial_types=initial_type,
+                target_opset=config.opset_version,
+            )
 
         # Serialize to bytes
         return bytes(onnx_model.SerializeToString())

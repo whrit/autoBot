@@ -6,7 +6,6 @@ Tests WebSocket-based fill confirmations via Alpaca TradingStream.
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
 
 import pytest
 
@@ -85,7 +84,7 @@ class TestFillConfirmationStreamInit:
         self, mock_stream_class: MagicMock, fill_stream_config: FillStreamConfig
     ) -> None:
         """Test stream creation with correct params."""
-        stream = FillConfirmationStream(fill_stream_config)
+        FillConfirmationStream(fill_stream_config)
 
         mock_stream_class.assert_called_once_with(
             api_key=fill_stream_config.api_key,
@@ -283,13 +282,11 @@ class TestFillConfirmationStreamLifecycle:
     ) -> None:
         """Test that start subscribes to trade updates."""
         mock_stream = MagicMock()
-        mock_stream._run = AsyncMock()
+        # Mock .run() to complete immediately (sync method called via run_in_executor)
+        mock_stream.run = MagicMock(side_effect=Exception("Test stop"))
         mock_stream_class.return_value = mock_stream
 
         stream = FillConfirmationStream(fill_stream_config)
-
-        # Mock the run to complete immediately
-        mock_stream._run.side_effect = Exception("Test stop")
 
         with pytest.raises(Exception, match="Test stop"):
             await stream.start()

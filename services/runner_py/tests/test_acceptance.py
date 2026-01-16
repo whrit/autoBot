@@ -4,7 +4,6 @@ Tests for Phase 1 acceptance testing (T6.12).
 TDD tests written before implementation.
 """
 
-import pytest
 
 from runner_py.acceptance import AcceptanceCriteria, AcceptanceResult, AcceptanceTester
 

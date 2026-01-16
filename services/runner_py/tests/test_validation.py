@@ -4,9 +4,7 @@ Tests for shadow vs backtest behavior validation (T6.07).
 TDD tests written before implementation.
 """
 
-import numpy as np
 import polars as pl
-import pytest
 
 from runner_py.validation import BehaviorValidator, ValidationConfig, ValidationResult
 

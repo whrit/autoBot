@@ -13,7 +13,7 @@ import polars as pl
 import pytest
 
 if TYPE_CHECKING:
-    from runner_py.orchestrator import Orchestrator, OrchestrationConfig
+    from runner_py.orchestrator import OrchestrationConfig, Orchestrator
     from runner_py.promotion import AutoPromoter, PromotionCriteria
 
 
@@ -147,15 +147,15 @@ def empty_fills() -> pl.DataFrame:
 
 
 @pytest.fixture
-def default_orchestration_config() -> "OrchestrationConfig":
+def default_orchestration_config() -> OrchestrationConfig:
     """Create default orchestration config for tests."""
-    from runner_py.orchestrator import OrchestrationConfig, OrchestrationMode
+    from runner_py.orchestrator import OrchestrationConfig
 
     return OrchestrationConfig()
 
 
 @pytest.fixture
-def test_orchestration_config() -> "OrchestrationConfig":
+def test_orchestration_config() -> OrchestrationConfig:
     """Create test-friendly orchestration config with no delays."""
     from runner_py.orchestrator import OrchestrationConfig, OrchestrationMode
 
@@ -172,7 +172,7 @@ def test_orchestration_config() -> "OrchestrationConfig":
 
 
 @pytest.fixture
-def orchestrator(test_orchestration_config: "OrchestrationConfig") -> "Orchestrator":
+def orchestrator(test_orchestration_config: OrchestrationConfig) -> Orchestrator:
     """Create orchestrator instance for tests."""
     from runner_py.orchestrator import Orchestrator
 
@@ -185,7 +185,7 @@ def orchestrator(test_orchestration_config: "OrchestrationConfig") -> "Orchestra
 
 
 @pytest.fixture
-def default_promotion_criteria() -> "PromotionCriteria":
+def default_promotion_criteria() -> PromotionCriteria:
     """Create default promotion criteria."""
     from runner_py.promotion import PromotionCriteria
 
@@ -193,7 +193,7 @@ def default_promotion_criteria() -> "PromotionCriteria":
 
 
 @pytest.fixture
-def lenient_promotion_criteria() -> "PromotionCriteria":
+def lenient_promotion_criteria() -> PromotionCriteria:
     """Create lenient promotion criteria for testing."""
     from runner_py.promotion import PromotionCriteria
 
@@ -207,7 +207,7 @@ def lenient_promotion_criteria() -> "PromotionCriteria":
 
 
 @pytest.fixture
-def auto_promoter(default_promotion_criteria: "PromotionCriteria") -> "AutoPromoter":
+def auto_promoter(default_promotion_criteria: PromotionCriteria) -> AutoPromoter:
     """Create auto promoter instance for tests."""
     from runner_py.promotion import AutoPromoter
 

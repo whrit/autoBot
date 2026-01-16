@@ -12,16 +12,14 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any, cast
 
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.models import Order, Position, TradeAccount
 from alpaca.trading.requests import MarketOrderRequest
 
 from runner_py.types import ExecutionResult, Signal, SignalDirection
-
-if TYPE_CHECKING:
-    from alpaca.trading.models import Order
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +132,8 @@ class PaperExecutor:
             order_id = self.submit_order(signal)
 
             # Get order details
-            order = self.client.get_order_by_id(order_id)
+            order_response = self.client.get_order_by_id(order_id)
+            order = cast(Order, order_response)
 
             return ExecutionResult(
                 success=True,
@@ -251,14 +250,16 @@ class PaperExecutor:
             f"notional=${order_request.notional}"
         )
 
-        order: Order = self.client.submit_order(order_request)
+        order_response = self.client.submit_order(order_request)
+        order = cast(Order, order_response)
 
-        # Track pending order
-        self._pending_orders[order.id] = signal
+        # Track pending order - convert UUID to str
+        order_id_str = str(order.id)
+        self._pending_orders[order_id_str] = signal
 
-        logger.info(f"Paper order submitted: {order.id} status={order.status.value}")
+        logger.info(f"Paper order submitted: {order_id_str} status={order.status.value}")
 
-        return order.id
+        return order_id_str
 
     def get_order_status(self, order_id: str) -> dict[str, Any]:
         """
@@ -270,13 +271,14 @@ class PaperExecutor:
         Returns:
             Dictionary with order status details
         """
-        order = self.client.get_order_by_id(order_id)
+        order_response = self.client.get_order_by_id(order_id)
+        order = cast(Order, order_response)
 
         return {
-            "order_id": order.id,
+            "order_id": str(order.id),
             "symbol": order.symbol,
-            "side": order.side.value,
-            "status": order.status.value,
+            "side": order.side.value if order.side else None,
+            "status": order.status.value if order.status else None,
             "filled_qty": str(order.filled_qty) if order.filled_qty else None,
             "filled_avg_price": str(order.filled_avg_price) if order.filled_avg_price else None,
             "created_at": order.created_at.isoformat() if order.created_at else None,
@@ -309,18 +311,19 @@ class PaperExecutor:
         Returns:
             List of position dictionaries
         """
-        positions = self.client.get_all_positions()
+        positions_response = self.client.get_all_positions()
 
-        return [
-            {
+        result = []
+        for p_response in positions_response:
+            p = cast(Position, p_response)
+            result.append({
                 "symbol": p.symbol,
                 "qty": str(p.qty),
                 "avg_entry_price": str(p.avg_entry_price),
                 "market_value": str(p.market_value),
-                "side": p.side,
-            }
-            for p in positions
-        ]
+                "side": str(p.side) if p.side else None,
+            })
+        return result
 
     def get_account(self) -> dict[str, Any]:
         """
@@ -329,13 +332,14 @@ class PaperExecutor:
         Returns:
             Account details dictionary
         """
-        account = self.client.get_account()
+        account_response = self.client.get_account()
+        account = cast(TradeAccount, account_response)
 
         return {
             "buying_power": str(account.buying_power),
             "cash": str(account.cash),
             "equity": str(account.equity),
-            "status": str(account.status),
+            "status": str(account.status) if account.status else None,
         }
 
     def _clear_pending_order(self, order_id: str) -> None:

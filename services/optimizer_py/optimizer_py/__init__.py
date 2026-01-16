@@ -57,6 +57,7 @@ from optimizer_py.sweep import (
     generate_parameter_combinations,
 )
 from optimizer_py.trend import TrendStrategy
+from optimizer_py.volatility import VolatilityStrategy
 
 __all__ = [
     # Strategy Framework (T4.01)
@@ -68,7 +69,9 @@ __all__ = [
     "TrendStrategy",
     # Mean Reversion Strategy (T4.03)
     "MeanReversionStrategy",
-    # Parameter Sweep (T4.04)
+    # Volatility Strategy (T4.04)
+    "VolatilityStrategy",
+    # Parameter Sweep
     "ParameterSweep",
     "SweepConfig",
     "SweepResult",

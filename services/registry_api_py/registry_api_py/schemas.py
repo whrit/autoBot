@@ -166,6 +166,14 @@ class BacktestRunCreate(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     metadata: dict[str, Any] | None = Field(None, description="Additional metadata")
+    # GPU Training Metadata (Phase 1 - GPU Determinism)
+    training_device: str | None = Field(None, description="Training device: cpu or cuda")
+    gpu_backend: str | None = Field(None, description="GPU backend: xgboost_gpu, pytorch_cuda, or cpu")
+    cuda_version: str | None = Field(None, description="CUDA version (e.g., 12.1)")
+    driver_version: str | None = Field(None, description="GPU driver version")
+    seed: int | None = Field(None, description="Random seed for reproducibility")
+    determinism_flags: str | None = Field(None, description="Determinism flags for reproducibility")
+    training_time_sec: float | None = Field(None, ge=0, description="Training duration in seconds")
 
 
 class BacktestRunResponse(BaseModel):
@@ -185,6 +193,14 @@ class BacktestRunResponse(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     metadata: dict[str, Any] | None = Field(None, validation_alias="metadata_")
+    # GPU Training Metadata (Phase 1 - GPU Determinism)
+    training_device: str | None = None
+    gpu_backend: str | None = None
+    cuda_version: str | None = None
+    driver_version: str | None = None
+    seed: int | None = None
+    determinism_flags: str | None = None
+    training_time_sec: float | None = None
 
 
 class BacktestRunListResponse(BaseModel):

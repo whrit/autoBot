@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query, UploadFile, status
+from fastapi import Depends, FastAPI, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -164,8 +164,8 @@ def list_strategies(
 
     if family:
         query = query.filter(Strategy.family == family)
-    if state:
-        query = query.filter(Strategy.state == state)
+    if state is not None:
+        query = query.filter(Strategy.state == state)  # type: ignore[arg-type]
 
     total = query.count()
     items = query.offset(skip).limit(limit).all()
@@ -396,17 +396,50 @@ def list_artifacts(
     )
 
 
-@app.delete("/artifacts/{artifact_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_artifact(artifact_id: int, db: DbDep) -> None:
-    """Delete an artifact."""
+@app.delete(
+    "/artifacts/{artifact_id}",
+    response_model=ArtifactDeleteResponse,
+    tags=["Artifact CRUD"],
+)
+def delete_artifact(artifact_id: int, db: DbDep, storage: StorageDep) -> ArtifactDeleteResponse:
+    """Delete an artifact by ID from the database and/or storage.
+
+    Handles artifacts created via either the database CRUD endpoint
+    or the file storage upload endpoint.
+
+    Args:
+        artifact_id: ID of the artifact to delete.
+
+    Returns:
+        Deletion confirmation.
+
+    Raises:
+        HTTPException: If artifact is not found in either system.
+    """
+    deleted_from_db = False
+    deleted_from_storage = False
+
+    # Try to delete from database
     db_artifact = db.query(Artifact).filter(Artifact.id == artifact_id).first()
-    if db_artifact is None:
+    if db_artifact is not None:
+        db.delete(db_artifact)
+        db.commit()
+        deleted_from_db = True
+
+    # Try to delete from storage
+    deleted_from_storage = storage.delete(artifact_id)
+
+    if not deleted_from_db and not deleted_from_storage:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Artifact with id {artifact_id} not found",
         )
-    db.delete(db_artifact)
-    db.commit()
+
+    return ArtifactDeleteResponse(
+        deleted=True,
+        artifact_id=artifact_id,
+        message="Artifact deleted successfully",
+    )
 
 
 # =============================================================================
@@ -452,6 +485,14 @@ def create_backtest_run(run: BacktestRunCreate, db: DbDep) -> BacktestRun:
         started_at=run.started_at,
         completed_at=run.completed_at,
         metadata_=run.metadata,
+        # GPU Training Metadata (Phase 1 - GPU Determinism)
+        training_device=run.training_device,
+        gpu_backend=run.gpu_backend,
+        cuda_version=run.cuda_version,
+        driver_version=run.driver_version,
+        seed=run.seed,
+        determinism_flags=run.determinism_flags,
+        training_time_sec=run.training_time_sec,
     )
     db.add(db_run)
     db.commit()
@@ -478,6 +519,7 @@ def list_backtest_runs(
     limit: int = Query(100, ge=1, le=1000),
     strategy_id: int | None = None,
     dataset_snapshot_id: int | None = None,
+    training_device: str | None = Query(None, description="Filter by training device (cpu, cuda)"),
 ) -> BacktestRunListResponse:
     """List all backtest runs with optional filtering."""
     query = db.query(BacktestRun)
@@ -486,6 +528,8 @@ def list_backtest_runs(
         query = query.filter(BacktestRun.strategy_id == strategy_id)
     if dataset_snapshot_id:
         query = query.filter(BacktestRun.dataset_snapshot_id == dataset_snapshot_id)
+    if training_device:
+        query = query.filter(BacktestRun.training_device == training_device)
 
     total = query.count()
     items = query.offset(skip).limit(limit).all()
@@ -524,6 +568,89 @@ def create_gate(gate: GateCreate, db: DbDep) -> Gate:
             detail=f"Gate with name '{gate.name}' already exists",
         ) from None
     return db_gate
+
+
+# Note: /gates/config endpoints MUST be defined before /gates/{gate_id}
+# to avoid route conflicts (FastAPI matches routes in order)
+@app.get(
+    "/gates/config",
+    response_model=GateConfigListResponse,
+    tags=["Gate Evaluation"],
+)
+async def get_evaluation_gate_config(
+    evaluator: EvaluatorDep,
+) -> GateConfigListResponse:
+    """Get current gate evaluation configuration.
+
+    Returns the list of quality gates and their thresholds
+    used for strategy evaluation.
+
+    Returns:
+        Current gate configuration.
+    """
+    gates = evaluator.gates
+
+    return GateConfigListResponse(
+        gates=[
+            GateConfigSchema(
+                gate_type=g.gate_type.value,
+                threshold=g.threshold,
+                required=g.required,
+            )
+            for g in gates
+        ],
+        total=len(gates),
+    )
+
+
+@app.put(
+    "/gates/config",
+    response_model=GateConfigUpdateResponse,
+    responses={422: {"model": ErrorResponse}},
+    tags=["Gate Evaluation"],
+)
+async def update_evaluation_gate_config(
+    request: GateConfigUpdateRequest,
+    evaluator: EvaluatorDep,
+) -> GateConfigUpdateResponse:
+    """Update gate evaluation configuration.
+
+    Replaces all existing gates with the provided configuration.
+    Use this to customize quality thresholds for strategy evaluation.
+
+    Args:
+        request: New gate configuration.
+
+    Returns:
+        Updated gate configuration.
+    """
+    # Validate all gate types
+    new_gates: list[GateConfig] = []
+    for gate_schema in request.gates:
+        gate_type = _validate_gate_type(gate_schema.gate_type)
+        new_gates.append(
+            GateConfig(
+                gate_type=gate_type,
+                threshold=gate_schema.threshold,
+                required=gate_schema.required,
+            )
+        )
+
+    # Update evaluator
+    evaluator.gates = new_gates
+
+    return GateConfigUpdateResponse(
+        updated=True,
+        message=f"Gate configuration updated with {len(new_gates)} gates",
+        gates=[
+            GateConfigSchema(
+                gate_type=g.gate_type.value,
+                threshold=g.threshold,
+                required=g.required,
+            )
+            for g in new_gates
+        ],
+    )
 
 
 @app.get("/gates/{gate_id}", response_model=GateResponse)
@@ -702,7 +829,7 @@ def _validate_artifact_type(artifact_type: str) -> ArtifactType:
     except ValueError as e:
         valid_types = [t.value for t in ArtifactType]
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Invalid artifact type '{artifact_type}'. Valid types: {valid_types}",
         ) from e
 
@@ -717,9 +844,9 @@ def _validate_artifact_type(artifact_type: str) -> ArtifactType:
 async def upload_artifact(
     strategy_id: int,
     file: UploadFile,
-    artifact_type: str,
     db: DbDep,
     storage: StorageDep,
+    artifact_type: str = Form(...),
 ) -> ArtifactUploadResponse:
     """Upload an artifact file for a strategy.
 
@@ -853,7 +980,7 @@ async def download_artifact_file(
 
 
 @app.delete(
-    "/artifacts/{artifact_id}",
+    "/artifacts/{artifact_id}/file",
     response_model=ArtifactDeleteResponse,
     responses={404: {"model": ErrorResponse}},
     tags=["Artifact Storage"],
@@ -862,7 +989,7 @@ async def delete_artifact_file(
     artifact_id: int,
     storage: StorageDep,
 ) -> ArtifactDeleteResponse:
-    """Delete an artifact file by ID.
+    """Delete an artifact file by ID from storage.
 
     Args:
         artifact_id: ID of the artifact to delete.
@@ -897,7 +1024,7 @@ def _validate_gate_type(gate_type: str) -> GateType:
     except ValueError as e:
         valid_types = [t.value for t in GateType]
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Invalid gate type '{gate_type}'. Valid types: {valid_types}",
         ) from e
 
@@ -966,87 +1093,6 @@ async def evaluate_strategy_gates(
                 required=r.required,
             )
             for r in results
-        ],
-    )
-
-
-@app.get(
-    "/gates/config",
-    response_model=GateConfigListResponse,
-    tags=["Gate Evaluation"],
-)
-async def get_evaluation_gate_config(
-    evaluator: EvaluatorDep,
-) -> GateConfigListResponse:
-    """Get current gate evaluation configuration.
-
-    Returns the list of quality gates and their thresholds
-    used for strategy evaluation.
-
-    Returns:
-        Current gate configuration.
-    """
-    gates = evaluator.gates
-
-    return GateConfigListResponse(
-        gates=[
-            GateConfigSchema(
-                gate_type=g.gate_type.value,
-                threshold=g.threshold,
-                required=g.required,
-            )
-            for g in gates
-        ],
-        total=len(gates),
-    )
-
-
-@app.put(
-    "/gates/config",
-    response_model=GateConfigUpdateResponse,
-    responses={422: {"model": ErrorResponse}},
-    tags=["Gate Evaluation"],
-)
-async def update_evaluation_gate_config(
-    request: GateConfigUpdateRequest,
-    evaluator: EvaluatorDep,
-) -> GateConfigUpdateResponse:
-    """Update gate evaluation configuration.
-
-    Replaces all existing gates with the provided configuration.
-    Use this to customize quality thresholds for strategy evaluation.
-
-    Args:
-        request: New gate configuration.
-
-    Returns:
-        Updated gate configuration.
-    """
-    # Validate all gate types
-    new_gates: list[GateConfig] = []
-    for gate_schema in request.gates:
-        gate_type = _validate_gate_type(gate_schema.gate_type)
-        new_gates.append(
-            GateConfig(
-                gate_type=gate_type,
-                threshold=gate_schema.threshold,
-                required=gate_schema.required,
-            )
-        )
-
-    # Update evaluator
-    evaluator.gates = new_gates
-
-    return GateConfigUpdateResponse(
-        updated=True,
-        message=f"Gate configuration updated with {len(new_gates)} gates",
-        gates=[
-            GateConfigSchema(
-                gate_type=g.gate_type.value,
-                threshold=g.threshold,
-                required=g.required,
-            )
-            for g in new_gates
         ],
     )
 

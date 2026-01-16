@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 
 from sqlalchemy import (
@@ -68,8 +68,8 @@ class Strategy(Base):
     version = Column(String, nullable=False)
     parameters = Column(JSON, nullable=False)
     state: PromotionState = Column(SQLEnum(PromotionState), default=PromotionState.CANDIDATE, nullable=False)  # type: ignore[assignment]
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    updated_at = Column(DateTime, onupdate=lambda: datetime.now(UTC))
 
     # Relationships
     artifacts = relationship("Artifact", back_populates="strategy", cascade="all, delete-orphan")
@@ -88,7 +88,7 @@ class Artifact(Base):
     artifact_type = Column(String, nullable=False)  # "onnx", "json", "config"
     path = Column(String, nullable=False)
     checksum = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     # Relationships
     strategy = relationship("Strategy", back_populates="artifacts")
@@ -108,7 +108,7 @@ class DatasetSnapshot(Base):
     feature_schema_version = Column(String)
     row_count = Column(Integer)
     checksum = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     # Relationships
     backtest_runs = relationship("BacktestRun", back_populates="dataset_snapshot")
@@ -140,6 +140,15 @@ class BacktestRun(Base):
     # Additional metadata
     metadata_ = Column("metadata", JSON)
 
+    # GPU Training Metadata (Phase 1 - GPU Determinism)
+    training_device = Column(String, nullable=True)  # "cpu" | "cuda"
+    gpu_backend = Column(String, nullable=True)  # "xgboost_gpu" | "pytorch_cuda" | "cpu"
+    cuda_version = Column(String, nullable=True)  # e.g., "12.1"
+    driver_version = Column(String, nullable=True)  # e.g., "535.104.05"
+    seed = Column(Integer, nullable=True)  # Random seed for reproducibility
+    determinism_flags = Column(String, nullable=True)  # e.g., "CUDA_LAUNCH_BLOCKING=1"
+    training_time_sec = Column(Float, nullable=True)  # Training duration in seconds
+
     # Relationships
     strategy = relationship("Strategy", back_populates="backtest_runs")
     dataset_snapshot = relationship("DatasetSnapshot", back_populates="backtest_runs")
@@ -156,8 +165,8 @@ class Gate(Base):
     gate_type = Column(String, nullable=False)  # "backtest", "shadow", "paper"
     criteria = Column(JSON, nullable=False)  # JSON object with gate criteria
     is_active = Column(Integer, default=1)  # Boolean as integer for SQLite compatibility
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    updated_at = Column(DateTime, onupdate=lambda: datetime.now(UTC))
 
 
 class Promotion(Base):
@@ -172,7 +181,7 @@ class Promotion(Base):
     to_state: PromotionState = Column(SQLEnum(PromotionState), nullable=False)  # type: ignore[assignment]
     passed = Column(Integer, nullable=False)  # Boolean as integer for SQLite compatibility
     evaluation_results = Column(JSON)  # Detailed results from gate evaluation
-    promoted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    promoted_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     promoted_by = Column(String)  # User or system that triggered promotion
 
 
@@ -189,5 +198,5 @@ class AuditLogEntry(Base):
     old_value = Column(JSON, nullable=True)
     new_value = Column(JSON, nullable=True)
     message = Column(String, nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False, index=True)
     metadata_ = Column("metadata", JSON, nullable=True)

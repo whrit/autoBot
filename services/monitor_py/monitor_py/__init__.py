@@ -6,8 +6,18 @@ This package provides monitoring capabilities for:
 - Drawdown alerts (T5.09)
 - Prometheus metrics export (T5.10)
 - Rollback trigger logic (T5.11)
+- Fill rate monitoring
+- Turnover analysis
+- Shadow vs backtest behavior comparison
 """
 
+from monitor_py.behavior_comparison import (
+    BehaviorComparator,
+    BehaviorConfig,
+    BehaviorStats,
+    ExecutionRecord,
+    SignalRecord,
+)
 from monitor_py.drawdown import DrawdownConfig, DrawdownMonitor, DrawdownStatus
 from monitor_py.feed_health import (
     FeedHealthConfig,
@@ -15,9 +25,21 @@ from monitor_py.feed_health import (
     FeedHealthStatus,
     FeedStatus,
 )
+from monitor_py.fill_rate import (
+    FillEvent,
+    FillRateConfig,
+    FillRateStats,
+    FillRateTracker,
+)
 from monitor_py.metrics import MetricsExporter
 from monitor_py.rollback import RollbackAction, RollbackConfig, RollbackManager
 from monitor_py.slippage import SlippageConfig, SlippageStats, SlippageTracker
+from monitor_py.turnover import (
+    TradeRecord,
+    TurnoverAnalyzer,
+    TurnoverConfig,
+    TurnoverStats,
+)
 
 __all__ = [
     # Feed Health
@@ -39,6 +61,22 @@ __all__ = [
     "RollbackAction",
     "RollbackConfig",
     "RollbackManager",
+    # Fill Rate
+    "FillRateConfig",
+    "FillRateStats",
+    "FillRateTracker",
+    "FillEvent",
+    # Turnover
+    "TurnoverConfig",
+    "TurnoverStats",
+    "TurnoverAnalyzer",
+    "TradeRecord",
+    # Behavior Comparison
+    "BehaviorConfig",
+    "BehaviorStats",
+    "BehaviorComparator",
+    "SignalRecord",
+    "ExecutionRecord",
 ]
 
 __version__ = "0.1.0"

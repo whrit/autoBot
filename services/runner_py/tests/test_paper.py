@@ -5,13 +5,13 @@ Tests paper trading via Alpaca API with mocked responses.
 """
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
 from runner_py.paper import PaperConfig, PaperExecutor, PaperFill
-from runner_py.types import ExecutionResult, Signal, SignalDirection
+from runner_py.types import Signal, SignalDirection
 
 
 @pytest.fixture

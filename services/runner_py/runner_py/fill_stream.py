@@ -9,6 +9,7 @@ CRITICAL: Always uses paper=True to connect to paper trading WebSocket.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -197,7 +198,9 @@ class FillConfirmationStream:
         self._stream.subscribe_trade_updates(self._handle_trade_update)
 
         try:
-            await self._stream._run()
+            # TradingStream.run() is synchronous, run in executor for async compat
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, self._stream.run)
         except Exception as e:
             if self._running:
                 logger.error(f"Stream error: {e}", exc_info=True)

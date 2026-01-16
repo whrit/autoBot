@@ -4,7 +4,6 @@ Tests for performance benchmarking (T6.10).
 TDD tests written before implementation.
 """
 
-import pytest
 
 from runner_py.benchmark import BenchmarkConfig, BenchmarkResult, PerformanceBenchmark
 
@@ -201,7 +200,7 @@ class TestBenchmarkMeasurements:
 
         # Throughput should be approximately 1000 / avg_latency for single ops
         # Allow for some variance due to parallelism and overhead
-        expected_throughput = 1000.0 / result.avg_latency_ms
+        1000.0 / result.avg_latency_ms
         # Throughput can vary significantly due to batching etc
         assert result.throughput_per_sec > 0
 

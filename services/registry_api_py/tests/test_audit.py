@@ -6,7 +6,7 @@ for recording and querying audit events.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -314,7 +314,7 @@ class TestQuery:
         """Test querying by time range."""
         audit_log = AuditLog(db_session)
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         # Create entries (they'll have automatic timestamps)
         audit_log.record(
@@ -415,7 +415,7 @@ class TestAuditEntry:
             old_value=None,
             new_value={"name": "test"},
             message="Test entry",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             metadata={},
         )
 
@@ -425,7 +425,7 @@ class TestAuditEntry:
 
     def test_audit_entry_with_all_fields(self) -> None:
         """Test creating an audit entry with all fields populated."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         entry = AuditEntry(
             id=1,
             event_type=AuditEventType.STRATEGY_UPDATED,

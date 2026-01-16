@@ -25,7 +25,13 @@ class MicrostructureBarBuilder:
     Build microstructure bars from trade and quote data.
 
     Supports 5s, 15s, and 30s granularities.
-    Computes: vwap, midprice, microprice, spread, quote_imbalance, realized_vol.
+    Computes: vwap, midprice, microprice, spread, quote_imbalance, trade_imbalance, realized_vol.
+
+    The trade_imbalance feature measures the imbalance between buyer-initiated
+    and seller-initiated trades using the tick rule:
+        trade_imbalance = (buy_volume - sell_volume) / (buy_volume + sell_volume)
+    where buy_volume is the volume of uptick trades and sell_volume is the volume
+    of downtick trades. Values range from -1 (all sells) to 1 (all buys).
     """
 
     def __init__(self, granularity: str = "30s") -> None:
@@ -94,6 +100,7 @@ class MicrostructureBarBuilder:
                 pl.lit(0.0).alias("vwap"),
                 pl.lit(0.0).alias("trade_volume"),
                 pl.lit(0.0).alias("realized_vol"),
+                pl.lit(0.0).alias("trade_imbalance"),
             ])
 
         # Add symbol and bar_end
@@ -107,6 +114,7 @@ class MicrostructureBarBuilder:
             pl.col("vwap").fill_null(pl.col("midprice")),
             pl.col("trade_volume").fill_null(0.0),
             pl.col("realized_vol").fill_null(0.0),
+            pl.col("trade_imbalance").fill_null(0.0),
         ])
 
         # Reorder columns to match schema
@@ -121,6 +129,7 @@ class MicrostructureBarBuilder:
             "bid_size",
             "ask_size",
             "quote_imbalance",
+            "trade_imbalance",
             "trade_volume",
             "realized_vol",
         ])
@@ -197,9 +206,22 @@ class MicrostructureBarBuilder:
         if trades.is_empty():
             return pl.DataFrame()
 
+        # Add tick direction using tick rule (compare to previous price)
+        # uptick (price > prev_price) = buy, downtick (price < prev_price) = sell
+        trades_with_direction = trades.sort("ts_event").with_columns([
+            pl.col("price").shift(1).alias("prev_price")
+        ]).with_columns([
+            pl.when(pl.col("price") > pl.col("prev_price"))
+            .then(pl.lit(1))  # Buy
+            .when(pl.col("price") < pl.col("prev_price"))
+            .then(pl.lit(-1))  # Sell
+            .otherwise(pl.lit(0))  # No change
+            .alias("direction")
+        ])
+
         # Group trades by time interval
         trade_bars = (
-            trades.sort("ts_event")
+            trades_with_direction
             .group_by_dynamic(
                 "ts_event",
                 every=interval_str,
@@ -215,6 +237,18 @@ class MicrostructureBarBuilder:
                 ).alias("vwap"),
                 # Total volume
                 pl.col("size").sum().alias("trade_volume"),
+                # Buy volume (upticks)
+                pl.when(pl.col("direction") == 1)
+                .then(pl.col("size"))
+                .otherwise(0.0)
+                .sum()
+                .alias("buy_volume"),
+                # Sell volume (downticks)
+                pl.when(pl.col("direction") == -1)
+                .then(pl.col("size"))
+                .otherwise(0.0)
+                .sum()
+                .alias("sell_volume"),
                 # Returns for realized vol
                 pl.col("price").alias("prices"),
             ])
@@ -231,7 +265,18 @@ class MicrostructureBarBuilder:
             .alias("realized_vol")
         ])
 
-        return trade_bars.drop("prices")
+        # Calculate trade_imbalance = (buy_volume - sell_volume) / (buy_volume + sell_volume)
+        trade_bars = trade_bars.with_columns([
+            pl.when(pl.col("buy_volume") + pl.col("sell_volume") > 0)
+            .then(
+                (pl.col("buy_volume") - pl.col("sell_volume"))
+                / (pl.col("buy_volume") + pl.col("sell_volume"))
+            )
+            .otherwise(0.0)
+            .alias("trade_imbalance")
+        ])
+
+        return trade_bars.drop(["prices", "buy_volume", "sell_volume"])
 
     @staticmethod
     def _calc_realized_vol(prices: pl.Series) -> float:
@@ -286,6 +331,7 @@ class MicrostructureBarBuilder:
             "bid_size": pl.Series([], dtype=pl.Float64),
             "ask_size": pl.Series([], dtype=pl.Float64),
             "quote_imbalance": pl.Series([], dtype=pl.Float64),
+            "trade_imbalance": pl.Series([], dtype=pl.Float64),
             "trade_volume": pl.Series([], dtype=pl.Float64),
             "realized_vol": pl.Series([], dtype=pl.Float64),
         })

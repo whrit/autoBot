@@ -4,9 +4,7 @@ Tests for paper slippage analysis (T6.08).
 TDD tests written before implementation.
 """
 
-import numpy as np
 import polars as pl
-import pytest
 
 from runner_py.slippage_analysis import (
     SlippageAnalysisConfig,
@@ -168,7 +166,7 @@ class TestSlippageAnalyzer:
 
         assert isinstance(by_hour, dict)
         # All hours should be valid (0-23)
-        for hour in by_hour.keys():
+        for hour in by_hour:
             assert 0 <= hour <= 23
             assert "avg_slippage_bps" in by_hour[hour]
             assert "fill_count" in by_hour[hour]

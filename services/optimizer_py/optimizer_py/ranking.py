@@ -10,6 +10,7 @@ Key Features:
 - Ranking across all families
 - Filtering by minimum trade count and maximum drawdown
 - Deterministic ranking (no random tie-breaking)
+- Complexity penalty integration to penalize overly complex strategies
 
 Example usage:
     >>> from optimizer_py.ranking import CandidateRanker, RankingConfig
@@ -17,6 +18,12 @@ Example usage:
     >>> ranker = CandidateRanker(config)
     >>> ranked = ranker.rank_across_families(candidates)
     >>> top_3 = ranker.get_top_candidates(candidates, n=3)
+
+With complexity penalties:
+    >>> from optimizer_py.complexity import ComplexityPenaltyConfig
+    >>> complexity_config = ComplexityPenaltyConfig(max_parameters=10)
+    >>> config = RankingConfig(complexity_config=complexity_config)
+    >>> ranker = CandidateRanker(config)
 """
 
 from __future__ import annotations
@@ -24,6 +31,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+
+from optimizer_py.complexity import ComplexityPenaltyConfig, compute_complexity_penalty
 
 
 class RankingMetric(str, Enum):
@@ -123,6 +132,8 @@ class RankingConfig:
         sortino_weight: Weight for Sortino ratio (default: 0.3)
         profit_factor_weight: Weight for profit factor (default: 0.2)
         drawdown_penalty_weight: Penalty weight for drawdown (default: 0.1)
+        complexity_config: Configuration for complexity penalties (optional)
+        apply_complexity_penalty: Whether to apply complexity penalties (default: True)
     """
 
     metric: RankingMetric = RankingMetric.COMPOSITE
@@ -132,6 +143,8 @@ class RankingConfig:
     sortino_weight: float = 0.3
     profit_factor_weight: float = 0.2
     drawdown_penalty_weight: float = 0.1
+    complexity_config: ComplexityPenaltyConfig | None = None
+    apply_complexity_penalty: bool = True
 
 
 class CandidateRanker:
@@ -219,6 +232,9 @@ class CandidateRanker:
         """
         Update composite scores for all candidates.
 
+        Computes composite scores from performance metrics and optionally
+        applies complexity penalties to penalize overly complex strategies.
+
         Args:
             candidates: List of candidates to update
 
@@ -232,9 +248,33 @@ class CandidateRanker:
                 "profit_factor": candidate.profit_factor,
                 "max_drawdown": candidate.max_drawdown,
             }
-            candidate.composite_score = self.compute_composite_score(metrics)
+            base_score = self.compute_composite_score(metrics)
+
+            # Apply complexity penalty if enabled
+            if self.config.apply_complexity_penalty:
+                complexity_penalty = self._compute_complexity_penalty(candidate.params)
+                candidate.composite_score = base_score - complexity_penalty
+            else:
+                candidate.composite_score = base_score
 
         return candidates
+
+    def _compute_complexity_penalty(self, params: dict[str, Any]) -> float:
+        """
+        Compute complexity penalty for a strategy's parameters.
+
+        Args:
+            params: Strategy parameters dictionary
+
+        Returns:
+            Complexity penalty value (0.0 if disabled or no config)
+        """
+        if not self.config.apply_complexity_penalty:
+            return 0.0
+
+        # Use provided config or default
+        complexity_config = self.config.complexity_config or ComplexityPenaltyConfig()
+        return compute_complexity_penalty(params, complexity_config)
 
     def rank_within_family(
         self, candidates: list[CandidateScore]

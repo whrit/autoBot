@@ -10,7 +10,7 @@ Tests cover:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import polars as pl
 import pytest
@@ -18,7 +18,6 @@ import pytest
 from labeler_py.labels import DirectionLabeler
 from labeler_py.net_returns import NetOfSpreadCalculator
 from labeler_py.returns import ForwardReturnsCalculator
-
 
 # =============================================================================
 # FIXTURES
@@ -32,7 +31,7 @@ def sample_quotes_df() -> pl.DataFrame:
 
     Creates 20 minutes of quote data at 1-second intervals.
     """
-    base_time = datetime(2024, 1, 15, 9, 30, 0, tzinfo=timezone.utc)
+    base_time = datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)
     n_rows = 1200  # 20 minutes of 1-second data
 
     # Create timestamps
@@ -200,14 +199,14 @@ class TestForwardReturnsCalculator:
         assert len(result) > 0
 
     def test_calculate_returns_uses_midprice_not_last_trade(
-        self, returns_calculator: ForwardReturnsCalculator
+        self, returns_calculator: ForwardReturnsCalculator  # noqa: ARG002
     ) -> None:
         """
         Test that returns are calculated using midprice, not last trade price.
 
         This is critical for taker-realistic returns.
         """
-        base_time = datetime(2024, 1, 15, 9, 30, 0, tzinfo=timezone.utc)
+        base_time = datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)
 
         # Create simple quotes with known midprice
         quotes = pl.DataFrame(
@@ -273,7 +272,7 @@ class TestForwardReturnsCalculator:
         self, returns_calculator: ForwardReturnsCalculator
     ) -> None:
         """Test handling when there's insufficient forward data."""
-        base_time = datetime(2024, 1, 15, 9, 30, 0, tzinfo=timezone.utc)
+        base_time = datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)
 
         # Create only 30 seconds of data, but request 60-second horizon
         quotes = pl.DataFrame(
@@ -300,7 +299,7 @@ class TestForwardReturnsCalculator:
         self, returns_calculator: ForwardReturnsCalculator
     ) -> None:
         """Test returns calculation using microprice instead of midprice."""
-        base_time = datetime(2024, 1, 15, 9, 30, 0, tzinfo=timezone.utc)
+        base_time = datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)
 
         # Create quotes with imbalanced sizes
         quotes = pl.DataFrame(
@@ -408,7 +407,7 @@ class TestDirectionLabeler:
             {
                 "symbol": ["SPY"] * 5,
                 "decision_ts": [
-                    datetime(2024, 1, 15, 9, 30, i, tzinfo=timezone.utc)
+                    datetime(2024, 1, 15, 9, 30, i, tzinfo=UTC)
                     for i in range(5)
                 ],
                 "horizon": [60] * 5,
@@ -429,7 +428,7 @@ class TestDirectionLabeler:
         returns_df = pl.DataFrame(
             {
                 "symbol": ["SPY"],
-                "decision_ts": [datetime(2024, 1, 15, 9, 30, 0, tzinfo=timezone.utc)],
+                "decision_ts": [datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)],
                 "horizon": [60],
                 "fwd_return_mid": [0.002],
                 "extra_column": ["value"],
@@ -566,7 +565,7 @@ class TestNetOfSpreadCalculator:
             {
                 "symbol": ["SPY"] * 3,
                 "decision_ts": [
-                    datetime(2024, 1, 15, 9, 30, i, tzinfo=timezone.utc) for i in range(3)
+                    datetime(2024, 1, 15, 9, 30, i, tzinfo=UTC) for i in range(3)
                 ],
                 "horizon": [60] * 3,
                 "fwd_return_mid": [0.005, -0.005, 0.0001],
@@ -590,7 +589,7 @@ class TestNetOfSpreadCalculator:
         df = pl.DataFrame(
             {
                 "symbol": ["SPY"],
-                "decision_ts": [datetime(2024, 1, 15, 9, 30, 0, tzinfo=timezone.utc)],
+                "decision_ts": [datetime(2024, 1, 15, 9, 30, 0, tzinfo=UTC)],
                 "horizon": [60],
                 "fwd_return_mid": [0.005],
                 "bid_price": [100.0],

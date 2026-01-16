@@ -5,9 +5,68 @@ Combines multi-timeframe features into a single decision matrix.
 Each row = one decision point with all available features.
 """
 
+from pathlib import Path
+
 import polars as pl
+import pyarrow.parquet as pq
 
 from feature_builder_py.joins import AsOfJoiner
+
+
+def get_schema_version(source: pl.DataFrame | Path | str) -> str:
+    """
+    Get schema version from a DataFrame or Parquet file.
+
+    Args:
+        source: Either a DataFrame with schema_version column,
+                or a path to a Parquet file.
+
+    Returns:
+        The schema version string, or "unknown" if not found.
+    """
+    if isinstance(source, pl.DataFrame):
+        if "schema_version" in source.columns and len(source) > 0:
+            return str(source["schema_version"][0])
+        return "unknown"
+
+    # It's a path - read from Parquet metadata
+    path = Path(source)
+    if not path.exists():
+        return "unknown"
+
+    try:
+        # First try to read from Parquet metadata
+        parquet_file = pq.ParquetFile(path)
+        metadata = parquet_file.schema_arrow.metadata
+        if metadata and b"schema_version" in metadata:
+            return str(metadata[b"schema_version"].decode("utf-8"))
+
+        # Fallback: read the schema_version column
+        df = pl.read_parquet(path, columns=["schema_version"])
+        if len(df) > 0:
+            return str(df["schema_version"][0])
+    except Exception:
+        pass
+
+    return "unknown"
+
+
+def validate_schema_version(
+    source: pl.DataFrame | Path | str,
+    expected_version: str,
+) -> bool:
+    """
+    Validate that the schema version matches the expected version.
+
+    Args:
+        source: Either a DataFrame or path to a Parquet file.
+        expected_version: The expected schema version string.
+
+    Returns:
+        True if versions match, False otherwise.
+    """
+    actual_version = get_schema_version(source)
+    return actual_version == expected_version
 
 
 class DecisionFrameBuilder:
@@ -74,6 +133,11 @@ class DecisionFrameBuilder:
 
         # Ensure all expected columns exist
         frame = self._ensure_columns(frame)
+
+        # Add schema version column
+        frame = frame.with_columns(
+            pl.lit(self.schema_version).alias("schema_version")
+        )
 
         # Reorder columns to match schema
         return self._reorder_columns(frame)
@@ -236,11 +300,42 @@ class DecisionFrameBuilder:
             "ret_15m",
             "trend_15m",
             "vol_15m",
+            # Schema version (always last)
+            "schema_version",
         ]
 
         # Select only columns that exist
         available_columns = [c for c in column_order if c in frame.columns]
         return frame.select(available_columns)
+
+    def write_parquet(
+        self,
+        frame: pl.DataFrame,
+        path: Path | str,
+    ) -> None:
+        """
+        Write decision frame to Parquet with schema version metadata.
+
+        Args:
+            frame: DataFrame to write.
+            path: Path to output Parquet file.
+        """
+
+        path = Path(path)
+
+        # Convert to Arrow table
+        table = frame.to_arrow()
+
+        # Add schema_version to Arrow metadata
+        existing_metadata = table.schema.metadata or {}
+        new_metadata = {
+            **existing_metadata,
+            b"schema_version": self.schema_version.encode("utf-8"),
+        }
+        table = table.replace_schema_metadata(new_metadata)
+
+        # Write to Parquet
+        pq.write_table(table, path)
 
     def _empty_decision_frame(self) -> pl.DataFrame:
         """Return an empty DataFrame with correct schema."""
@@ -260,4 +355,5 @@ class DecisionFrameBuilder:
             "ret_15m": pl.Series([], dtype=pl.Float64),
             "trend_15m": pl.Series([], dtype=pl.Float64),
             "vol_15m": pl.Series([], dtype=pl.Float64),
+            "schema_version": pl.Series([], dtype=pl.String),
         })
