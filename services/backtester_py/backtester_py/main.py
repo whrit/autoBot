@@ -61,6 +61,116 @@ if TYPE_CHECKING:
 
 logger = get_logger("backtester.main")
 
+
+def load_from_lake(
+    lake_path: Path,
+    symbols: list[str],
+    data_type: str = "bars_provider",
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> pl.DataFrame:
+    """
+    Load data from Hive-partitioned lake directory.
+
+    Supports reading from lake/raw/{data_type}/dt=YYYY-MM-DD/symbol=XXX/data.parquet
+
+    Args:
+        lake_path: Path to lake directory (e.g., "./lake")
+        symbols: List of symbols to load (e.g., ["SPY", "QQQ"])
+        data_type: Type of data to load ("bars_provider", "trades", "quotes")
+        start_date: Optional start date filter (YYYY-MM-DD)
+        end_date: Optional end date filter (YYYY-MM-DD)
+
+    Returns:
+        Combined DataFrame with data from all symbols
+    """
+    import glob
+
+    frames: list[pl.DataFrame] = []
+
+    for symbol in symbols:
+        # Pattern for Hive-partitioned data
+        pattern = str(lake_path / "raw" / data_type / "*" / f"symbol={symbol}" / "*.parquet")
+        matching_files = glob.glob(pattern)
+
+        if not matching_files:
+            logger.warning(f"No data found for {symbol} in {lake_path}/raw/{data_type}/")
+            continue
+
+        logger.info(f"Loading {len(matching_files)} partition(s) for {symbol}")
+
+        # Scan with Hive partitioning
+        lf = pl.scan_parquet(matching_files, hive_partitioning=True)
+
+        # Apply date filters if provided (ts_event is timezone-aware UTC)
+        if start_date:
+            start_dt = datetime.fromisoformat(f"{start_date}T00:00:00+00:00")
+            lf = lf.filter(pl.col("ts_event") >= start_dt)
+        if end_date:
+            end_dt = datetime.fromisoformat(f"{end_date}T23:59:59+00:00")
+            lf = lf.filter(pl.col("ts_event") <= end_dt)
+
+        # Collect the data
+        df = lf.collect(engine="streaming")
+        frames.append(df)
+
+    if not frames:
+        logger.error(f"No data found for any symbols in {lake_path}")
+        return pl.DataFrame()
+
+    # Combine all symbols and sort by timestamp
+    combined = pl.concat(frames)
+
+    # Sort by timestamp (ts_event is the standard column name from ingestor)
+    if "ts_event" in combined.columns:
+        combined = combined.sort("ts_event")
+    elif "timestamp" in combined.columns:
+        combined = combined.sort("timestamp")
+
+    return combined
+
+
+def transform_lake_data_for_backtest(df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Transform lake data format to backtester expected format.
+
+    Lake data has: ts_event, symbol, open, high, low, close, volume
+    Backtester expects: timestamp, symbol, bid_price, ask_price, vol
+
+    Args:
+        df: Raw lake data
+
+    Returns:
+        Transformed DataFrame for backtester
+    """
+    if df.is_empty():
+        return df
+
+    # Check if already in backtester format
+    if "bid_price" in df.columns and "ask_price" in df.columns:
+        return df
+
+    # Transform from OHLCV to bid/ask format
+    # Use close price with a small spread for simulation
+    spread_pct = 0.0001  # 1 basis point spread
+
+    result = df.select([
+        # Rename ts_event to timestamp
+        (pl.col("ts_event") if "ts_event" in df.columns else pl.col("timestamp")).alias("timestamp"),
+        pl.col("symbol"),
+        # Use close price with spread
+        (pl.col("close") * (1 - spread_pct / 2)).alias("bid_price"),
+        (pl.col("close") * (1 + spread_pct / 2)).alias("ask_price"),
+        # Calculate volatility from high-low range if available
+        (
+            ((pl.col("high") - pl.col("low")) / pl.col("close"))
+            if "high" in df.columns and "low" in df.columns
+            else pl.lit(0.001)
+        ).alias("vol"),
+    ])
+
+    return result
+
 # Create console with trading theme
 console = Console(theme=TRADING_THEME)
 
@@ -406,6 +516,34 @@ def parse_args() -> argparse.Namespace:
         help="Run with demo data",
     )
 
+    # Lake data loading arguments
+    parser.add_argument(
+        "--lake",
+        type=Path,
+        help="Path to data lake directory (e.g., ./lake)",
+    )
+    parser.add_argument(
+        "--symbols",
+        type=str,
+        help="Comma-separated list of symbols to load (e.g., SPY,QQQ)",
+    )
+    parser.add_argument(
+        "--data-type",
+        type=str,
+        default="bars_provider",
+        help="Type of data to load from lake (bars_provider, trades, quotes)",
+    )
+    parser.add_argument(
+        "--start-date",
+        type=str,
+        help="Start date filter (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--end-date",
+        type=str,
+        help="End date filter (YYYY-MM-DD)",
+    )
+
     # Parallel walk-forward arguments
     parser.add_argument(
         "--parallel",
@@ -552,6 +690,58 @@ def generate_demo_data() -> tuple[pl.DataFrame, list[Any]]:
             target_notional=10_000.0,
         ))
 
+    return market_data, signals
+
+
+def generate_demo_signals_from_data(
+    market_data: pl.DataFrame,
+) -> tuple[pl.DataFrame, list[Any]]:
+    """
+    Generate demo momentum signals from actual market data.
+
+    Uses simple price momentum to generate trading signals.
+
+    Args:
+        market_data: Market data with timestamp, symbol, bid_price, ask_price
+
+    Returns:
+        Tuple of (market_data, signals)
+    """
+    import numpy as np
+
+    from backtester_py.engine import Signal, SignalType
+
+    signals = []
+
+    # Get unique symbols
+    symbols = market_data["symbol"].unique().to_list()
+
+    for symbol in symbols:
+        symbol_data = market_data.filter(pl.col("symbol") == symbol)
+
+        if len(symbol_data) < 20:
+            continue
+
+        timestamps = symbol_data["timestamp"].to_list()
+        # Use mid price
+        prices = (
+            (symbol_data["bid_price"] + symbol_data["ask_price"]) / 2
+        ).to_numpy()
+
+        # Generate signals every 20 bars using momentum
+        for i in range(20, len(prices), 20):
+            momentum = prices[i] / prices[i - 10] - 1
+            signal_type = SignalType.LONG if momentum > 0 else SignalType.SHORT
+
+            signals.append(Signal(
+                timestamp=timestamps[i],
+                symbol=symbol,
+                signal_type=signal_type,
+                strength=min(abs(momentum) * 100, 1.0),
+                target_notional=10_000.0,
+            ))
+
+    logger.info(f"Generated {len(signals)} signals from market data")
     return market_data, signals
 
 
@@ -877,6 +1067,51 @@ def run_grid_search_mode(
     return 0
 
 
+class MockCostModel:
+    """
+    Simple cost model for demo/testing purposes.
+
+    Picklable (module-level) for multiprocessing compatibility.
+    In production, replace with actual cost models from your codebase.
+    """
+
+    fixed_cost_bps = 1.0
+
+    def calculate_fill_price(
+        self,
+        side: str,
+        ask_price: float,
+        bid_price: float,
+        order_notional: float,
+        book_notional: float,
+        short_term_vol: float,
+    ) -> float:
+        """Calculate fill price with slippage based on volatility."""
+        slippage = short_term_vol * 0.1
+        if side == "buy":
+            return ask_price * (1 + slippage)
+        return bid_price * (1 - slippage)
+
+
+class MockRiskChecker:
+    """
+    Pass-through risk checker for demo/testing purposes.
+
+    Picklable (module-level) for multiprocessing compatibility.
+    In production, replace with actual risk models from your codebase.
+    """
+
+    def check_order(
+        self,
+        symbol: str,
+        side: str,
+        notional: float,
+        risk_state: Any,
+    ) -> list[Any]:
+        """Check order against risk limits (always passes in mock)."""
+        return []
+
+
 def main() -> int:
     """Main entry point for the backtester CLI."""
     args = parse_args()
@@ -903,9 +1138,43 @@ def main() -> int:
     ui.show_header()
 
     try:
+        signals = None  # Will be set if demo mode or generated from strategy
+
         if args.demo:
             console.print("[dim]Running with demo data...[/dim]\n")
             market_data, signals = generate_demo_data()
+        elif args.lake and args.symbols:
+            # Load from Hive-partitioned lake directory
+            symbols = [s.strip() for s in args.symbols.split(",")]
+            console.print(f"[dim]Loading from lake: {args.lake}[/dim]")
+            console.print(f"[dim]Symbols: {', '.join(symbols)}[/dim]")
+            if args.start_date:
+                console.print(f"[dim]Start date: {args.start_date}[/dim]")
+            if args.end_date:
+                console.print(f"[dim]End date: {args.end_date}[/dim]")
+            console.print()
+
+            raw_data = load_from_lake(
+                lake_path=args.lake,
+                symbols=symbols,
+                data_type=args.data_type,
+                start_date=args.start_date,
+                end_date=args.end_date,
+            )
+
+            if raw_data.is_empty():
+                console.print("[red]No data found in lake for specified symbols[/red]")
+                return 1
+
+            console.print(f"[dim]Loaded {len(raw_data):,} rows[/dim]\n")
+
+            # Transform lake data to backtester format
+            market_data = transform_lake_data_for_backtest(raw_data)
+
+            # Generate demo signals since lake data doesn't include signals
+            console.print("[dim]Generating momentum signals from data...[/dim]\n")
+            _, signals = generate_demo_signals_from_data(market_data)
+
         elif args.data:
             console.print(f"[dim]Loading data from {args.data}...[/dim]\n")
             if args.data.suffix == ".parquet":
@@ -916,41 +1185,18 @@ def main() -> int:
             console.print("[yellow]Signal generation not implemented - use --demo[/yellow]")
             return 1
         else:
-            console.print("[yellow]No data specified. Use --data or --demo[/yellow]")
+            console.print("[yellow]No data specified. Use --data, --lake with --symbols, or --demo[/yellow]")
+            console.print("[dim]Examples:[/dim]")
+            console.print("[dim]  --demo                          Run with synthetic demo data[/dim]")
+            console.print("[dim]  --lake lake --symbols SPY,QQQ   Load from Hive-partitioned lake[/dim]")
+            console.print("[dim]  --data market.parquet           Load from single file[/dim]")
             return 1
 
         # Create minimal cost/risk models for demo
         # In real usage, these would be injected from configuration
         from backtester_py.engine import BacktestConfig, BacktestEngine
 
-        # Create mock models for demo (would be real models in production)
-        class MockCostModel:
-            fixed_cost_bps = 1.0
-
-            def calculate_fill_price(
-                self,
-                side: str,
-                ask_price: float,
-                bid_price: float,
-                order_notional: float,
-                book_notional: float,
-                short_term_vol: float,
-            ) -> float:
-                slippage = short_term_vol * 0.1
-                if side == "buy":
-                    return ask_price * (1 + slippage)
-                return bid_price * (1 - slippage)
-
-        class MockRiskChecker:
-            def check_order(
-                self,
-                symbol: str,
-                side: str,
-                notional: float,
-                risk_state: Any,
-            ) -> list[Any]:
-                return []
-
+        # Use module-level mock models (picklable for multiprocessing)
         backtest_config = BacktestConfig(
             initial_capital=config.initial_capital,
             cost_model=MockCostModel(),  # type: ignore

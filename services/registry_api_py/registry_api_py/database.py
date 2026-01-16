@@ -33,3 +33,17 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+def init_db() -> None:
+    """Initialize database by creating all tables.
+
+    This should be called on application startup to ensure
+    all required tables exist.
+    """
+    from registry_api_py.models import Base
+    Base.metadata.create_all(bind=engine)
+
+
+# Auto-initialize on import (creates tables if they don't exist)
+init_db()

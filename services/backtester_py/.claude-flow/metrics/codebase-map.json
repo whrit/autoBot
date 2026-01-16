@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-01-16T23:37:39.440Z",
+  "projectRoot": "/home/bw/Projects/autoBot/services/backtester_py",
+  "structure": {
+    "hasPackageJson": false,
+    "hasTsConfig": false,
+    "hasClaudeConfig": false,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1768606659441
+}

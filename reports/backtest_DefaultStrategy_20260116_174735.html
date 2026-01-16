@@ -1,0 +1,1364 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backtest Report - DefaultStrategy</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --text-primary: #eee;
+            --text-secondary: #aaa;
+            --accent: #0f3460;
+            --profit: #00d26a;
+            --loss: #ff5252;
+            --border: #2a2a4e;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding: 2rem;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .metric-card {
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .metric-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-value.profit {
+            color: var(--profit);
+        }
+
+        .metric-value.loss {
+            color: var(--loss);
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .chart-container {
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+        }
+
+        .chart-container h2 {
+            margin-bottom: 1rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--accent);
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .buy { color: var(--profit); }
+        .sell { color: var(--loss); }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Backtest Report</h1>
+            <p class="subtitle">Strategy: DefaultStrategy</p>
+            <p class="subtitle">Generated: 2026-01-16 17:47:35</p>
+        </header>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-value loss">
+                    -1.13%
+                </div>
+                <div class="metric-label">Total Return</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">
+                    0.11
+                </div>
+                <div class="metric-label">Sharpe Ratio</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value loss">
+                    16.9%
+                </div>
+                <div class="metric-label">Max Drawdown</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">
+                    99.0%
+                </div>
+                <div class="metric-label">Win Rate</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">
+                    828
+                </div>
+                <div class="metric-label">Total Trades</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">
+                    0.00
+                </div>
+                <div class="metric-label">Profit Factor</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <h2>Equity Curve</h2>
+            <canvas id="equityChart" height="300"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <h2>Recent Trades</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Symbol</th>
+                        <th>Side</th>
+                        <th>Quantity</th>
+                        <th>Price</th>
+                        <th>Notional</th>
+                        <th>Slippage (bps)</th>
+                        <th>Commission</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td>2026-01-14T17:41:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.91</td>
+                        <td>$686.82</td>
+                        <td>$1,310</td>
+                        <td>1.0</td>
+                        <td>$0.13</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T17:41:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.13</td>
+                        <td>$686.77</td>
+                        <td>$87</td>
+                        <td>0.3</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T18:01:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>3.24</td>
+                        <td>$615.54</td>
+                        <td>$1,995</td>
+                        <td>1.0</td>
+                        <td>$0.20</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T18:01:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>0.58</td>
+                        <td>$615.50</td>
+                        <td>$358</td>
+                        <td>0.3</td>
+                        <td>$0.04</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T18:41:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.13</td>
+                        <td>$686.59</td>
+                        <td>$87</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T18:41:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>1.23</td>
+                        <td>$686.63</td>
+                        <td>$844</td>
+                        <td>0.3</td>
+                        <td>$0.08</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T18:42:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>0.58</td>
+                        <td>$615.22</td>
+                        <td>$358</td>
+                        <td>1.0</td>
+                        <td>$0.04</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T18:42:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>0.11</td>
+                        <td>$615.26</td>
+                        <td>$65</td>
+                        <td>0.3</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T19:01:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.23</td>
+                        <td>$688.20</td>
+                        <td>$844</td>
+                        <td>1.0</td>
+                        <td>$0.08</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T19:01:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.76</td>
+                        <td>$688.15</td>
+                        <td>$523</td>
+                        <td>0.2</td>
+                        <td>$0.05</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T19:22:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>0.11</td>
+                        <td>$616.89</td>
+                        <td>$65</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T19:22:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>0.71</td>
+                        <td>$616.84</td>
+                        <td>$438</td>
+                        <td>0.1</td>
+                        <td>$0.04</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T20:01:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.76</td>
+                        <td>$687.45</td>
+                        <td>$523</td>
+                        <td>1.0</td>
+                        <td>$0.05</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T20:01:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>1.96</td>
+                        <td>$687.49</td>
+                        <td>$1,351</td>
+                        <td>0.4</td>
+                        <td>$0.14</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T20:22:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>0.71</td>
+                        <td>$617.53</td>
+                        <td>$438</td>
+                        <td>1.0</td>
+                        <td>$0.04</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T20:22:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>0.20</td>
+                        <td>$617.56</td>
+                        <td>$121</td>
+                        <td>0.5</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T20:41:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.96</td>
+                        <td>$690.12</td>
+                        <td>$1,351</td>
+                        <td>1.0</td>
+                        <td>$0.14</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T20:41:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.03</td>
+                        <td>$690.09</td>
+                        <td>$711</td>
+                        <td>0.5</td>
+                        <td>$0.07</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T20:42:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>0.20</td>
+                        <td>$619.29</td>
+                        <td>$121</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T20:42:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>1.14</td>
+                        <td>$619.25</td>
+                        <td>$703</td>
+                        <td>0.3</td>
+                        <td>$0.07</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T14:17:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>1.14</td>
+                        <td>$625.89</td>
+                        <td>$703</td>
+                        <td>1.0</td>
+                        <td>$0.07</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T14:17:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>0.97</td>
+                        <td>$625.95</td>
+                        <td>$607</td>
+                        <td>0.0</td>
+                        <td>$0.06</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T14:44:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>0.97</td>
+                        <td>$626.70</td>
+                        <td>$607</td>
+                        <td>1.0</td>
+                        <td>$0.06</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T14:44:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>2.54</td>
+                        <td>$626.73</td>
+                        <td>$1,590</td>
+                        <td>1.4</td>
+                        <td>$0.16</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T14:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>1.03</td>
+                        <td>$693.21</td>
+                        <td>$711</td>
+                        <td>1.0</td>
+                        <td>$0.07</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T14:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.84</td>
+                        <td>$693.25</td>
+                        <td>$584</td>
+                        <td>0.4</td>
+                        <td>$0.06</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T15:04:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>2.54</td>
+                        <td>$625.24</td>
+                        <td>$1,590</td>
+                        <td>1.0</td>
+                        <td>$0.16</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T15:04:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>1.34</td>
+                        <td>$625.26</td>
+                        <td>$839</td>
+                        <td>0.7</td>
+                        <td>$0.08</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T15:12:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.84</td>
+                        <td>$694.00</td>
+                        <td>$584</td>
+                        <td>1.0</td>
+                        <td>$0.06</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T15:12:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.14</td>
+                        <td>$693.95</td>
+                        <td>$94</td>
+                        <td>0.3</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T15:24:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>1.34</td>
+                        <td>$626.23</td>
+                        <td>$839</td>
+                        <td>1.0</td>
+                        <td>$0.08</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T15:24:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>1.94</td>
+                        <td>$626.22</td>
+                        <td>$1,215</td>
+                        <td>0.7</td>
+                        <td>$0.12</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T15:44:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>1.94</td>
+                        <td>$624.86</td>
+                        <td>$1,215</td>
+                        <td>1.0</td>
+                        <td>$0.12</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T15:44:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>3.19</td>
+                        <td>$624.86</td>
+                        <td>$1,996</td>
+                        <td>0.9</td>
+                        <td>$0.20</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T15:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.14</td>
+                        <td>$693.06</td>
+                        <td>$94</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T15:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>2.81</td>
+                        <td>$693.08</td>
+                        <td>$1,951</td>
+                        <td>0.7</td>
+                        <td>$0.20</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T16:04:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>3.19</td>
+                        <td>$626.28</td>
+                        <td>$1,996</td>
+                        <td>1.0</td>
+                        <td>$0.20</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T16:04:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>4.83</td>
+                        <td>$626.24</td>
+                        <td>$3,027</td>
+                        <td>0.2</td>
+                        <td>$0.30</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T16:32:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>2.81</td>
+                        <td>$695.09</td>
+                        <td>$1,951</td>
+                        <td>1.0</td>
+                        <td>$0.20</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T16:32:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.06</td>
+                        <td>$695.03</td>
+                        <td>$43</td>
+                        <td>0.1</td>
+                        <td>$0.00</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T17:12:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.06</td>
+                        <td>$695.18</td>
+                        <td>$43</td>
+                        <td>1.0</td>
+                        <td>$0.00</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T17:12:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.11</td>
+                        <td>$695.24</td>
+                        <td>$79</td>
+                        <td>0.1</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T17:24:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>4.83</td>
+                        <td>$625.99</td>
+                        <td>$3,027</td>
+                        <td>1.0</td>
+                        <td>$0.30</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T17:24:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>0.46</td>
+                        <td>$626.05</td>
+                        <td>$287</td>
+                        <td>0.0</td>
+                        <td>$0.03</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T17:44:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>0.46</td>
+                        <td>$625.72</td>
+                        <td>$287</td>
+                        <td>1.0</td>
+                        <td>$0.03</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T17:44:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>1.00</td>
+                        <td>$625.68</td>
+                        <td>$624</td>
+                        <td>0.3</td>
+                        <td>$0.06</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T17:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.11</td>
+                        <td>$694.69</td>
+                        <td>$79</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T17:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.11</td>
+                        <td>$694.63</td>
+                        <td>$79</td>
+                        <td>0.2</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T18:44:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>1.00</td>
+                        <td>$625.86</td>
+                        <td>$624</td>
+                        <td>1.0</td>
+                        <td>$0.06</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T18:44:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>0.54</td>
+                        <td>$625.92</td>
+                        <td>$335</td>
+                        <td>0.0</td>
+                        <td>$0.03</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T18:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.11</td>
+                        <td>$694.73</td>
+                        <td>$79</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T18:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.43</td>
+                        <td>$694.79</td>
+                        <td>$302</td>
+                        <td>0.1</td>
+                        <td>$0.03</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T19:45:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>0.54</td>
+                        <td>$623.48</td>
+                        <td>$335</td>
+                        <td>1.0</td>
+                        <td>$0.03</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T19:45:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>1.67</td>
+                        <td>$623.44</td>
+                        <td>$1,044</td>
+                        <td>0.3</td>
+                        <td>$0.10</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T20:25:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>1.67</td>
+                        <td>$621.09</td>
+                        <td>$1,044</td>
+                        <td>1.0</td>
+                        <td>$0.10</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T20:25:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>3.04</td>
+                        <td>$621.12</td>
+                        <td>$1,888</td>
+                        <td>0.5</td>
+                        <td>$0.19</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T20:32:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.43</td>
+                        <td>$692.01</td>
+                        <td>$302</td>
+                        <td>1.0</td>
+                        <td>$0.03</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T20:32:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.07</td>
+                        <td>$691.97</td>
+                        <td>$51</td>
+                        <td>0.4</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T20:45:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>3.04</td>
+                        <td>$621.72</td>
+                        <td>$1,888</td>
+                        <td>1.0</td>
+                        <td>$0.19</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T20:45:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>0.23</td>
+                        <td>$621.68</td>
+                        <td>$145</td>
+                        <td>0.3</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T20:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.07</td>
+                        <td>$691.55</td>
+                        <td>$51</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T20:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.70</td>
+                        <td>$691.59</td>
+                        <td>$484</td>
+                        <td>0.5</td>
+                        <td>$0.05</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T14:37:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.70</td>
+                        <td>$693.90</td>
+                        <td>$484</td>
+                        <td>1.0</td>
+                        <td>$0.05</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T14:37:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>3.72</td>
+                        <td>$693.86</td>
+                        <td>$2,579</td>
+                        <td>0.4</td>
+                        <td>$0.26</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T14:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>3.72</td>
+                        <td>$692.30</td>
+                        <td>$2,579</td>
+                        <td>1.0</td>
+                        <td>$0.26</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T14:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>2.39</td>
+                        <td>$692.35</td>
+                        <td>$1,658</td>
+                        <td>0.2</td>
+                        <td>$0.17</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T14:58:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>0.23</td>
+                        <td>$622.57</td>
+                        <td>$145</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T14:58:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>5.19</td>
+                        <td>$622.61</td>
+                        <td>$3,234</td>
+                        <td>0.4</td>
+                        <td>$0.32</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T15:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>2.39</td>
+                        <td>$691.76</td>
+                        <td>$1,658</td>
+                        <td>1.0</td>
+                        <td>$0.17</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T15:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>2.31</td>
+                        <td>$691.74</td>
+                        <td>$1,600</td>
+                        <td>0.7</td>
+                        <td>$0.16</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T15:58:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>5.19</td>
+                        <td>$620.85</td>
+                        <td>$3,234</td>
+                        <td>1.0</td>
+                        <td>$0.32</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T15:58:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>2.91</td>
+                        <td>$620.81</td>
+                        <td>$1,808</td>
+                        <td>0.3</td>
+                        <td>$0.18</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T16:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>2.31</td>
+                        <td>$692.45</td>
+                        <td>$1,600</td>
+                        <td>1.0</td>
+                        <td>$0.16</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T16:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>1.24</td>
+                        <td>$692.48</td>
+                        <td>$858</td>
+                        <td>0.6</td>
+                        <td>$0.09</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T16:58:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>2.91</td>
+                        <td>$621.70</td>
+                        <td>$1,808</td>
+                        <td>1.0</td>
+                        <td>$0.18</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T16:58:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>1.16</td>
+                        <td>$621.74</td>
+                        <td>$723</td>
+                        <td>0.2</td>
+                        <td>$0.07</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T17:18:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>1.16</td>
+                        <td>$621.77</td>
+                        <td>$723</td>
+                        <td>1.0</td>
+                        <td>$0.07</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T17:18:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>0.48</td>
+                        <td>$621.72</td>
+                        <td>$298</td>
+                        <td>0.2</td>
+                        <td>$0.03</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T17:37:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.24</td>
+                        <td>$692.86</td>
+                        <td>$858</td>
+                        <td>1.0</td>
+                        <td>$0.09</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T17:37:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.15</td>
+                        <td>$692.81</td>
+                        <td>$101</td>
+                        <td>0.2</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T17:38:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>0.48</td>
+                        <td>$621.37</td>
+                        <td>$298</td>
+                        <td>1.0</td>
+                        <td>$0.03</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T17:38:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>0.21</td>
+                        <td>$621.43</td>
+                        <td>$129</td>
+                        <td>0.1</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T17:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.15</td>
+                        <td>$692.14</td>
+                        <td>$101</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T17:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.51</td>
+                        <td>$692.19</td>
+                        <td>$354</td>
+                        <td>0.3</td>
+                        <td>$0.04</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T18:17:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.51</td>
+                        <td>$693.05</td>
+                        <td>$354</td>
+                        <td>1.0</td>
+                        <td>$0.04</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T18:17:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.06</td>
+                        <td>$692.99</td>
+                        <td>$737</td>
+                        <td>0.1</td>
+                        <td>$0.07</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T18:18:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>0.21</td>
+                        <td>$621.87</td>
+                        <td>$129</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T18:18:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>1.23</td>
+                        <td>$621.83</td>
+                        <td>$765</td>
+                        <td>0.2</td>
+                        <td>$0.08</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T18:38:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>1.23</td>
+                        <td>$621.69</td>
+                        <td>$765</td>
+                        <td>1.0</td>
+                        <td>$0.08</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T18:38:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>0.25</td>
+                        <td>$621.74</td>
+                        <td>$153</td>
+                        <td>0.2</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T18:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>1.06</td>
+                        <td>$692.63</td>
+                        <td>$737</td>
+                        <td>1.0</td>
+                        <td>$0.07</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T18:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.35</td>
+                        <td>$692.69</td>
+                        <td>$245</td>
+                        <td>0.1</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T18:58:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>0.25</td>
+                        <td>$622.02</td>
+                        <td>$153</td>
+                        <td>1.0</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T18:58:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>0.19</td>
+                        <td>$621.98</td>
+                        <td>$121</td>
+                        <td>0.2</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T19:18:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>0.19</td>
+                        <td>$620.78</td>
+                        <td>$121</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T19:18:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="sell">SELL</td>
+                        <td>3.79</td>
+                        <td>$620.80</td>
+                        <td>$2,354</td>
+                        <td>0.7</td>
+                        <td>$0.24</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T19:37:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.35</td>
+                        <td>$692.61</td>
+                        <td>$245</td>
+                        <td>1.0</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T19:37:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.04</td>
+                        <td>$692.56</td>
+                        <td>$723</td>
+                        <td>0.2</td>
+                        <td>$0.07</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T19:38:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>3.79</td>
+                        <td>$621.57</td>
+                        <td>$2,354</td>
+                        <td>1.0</td>
+                        <td>$0.24</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T19:38:00+00:00</td>
+                        <td>QQQ</td>
+                        <td class="buy">BUY</td>
+                        <td>1.37</td>
+                        <td>$621.53</td>
+                        <td>$854</td>
+                        <td>0.4</td>
+                        <td>$0.09</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </div>
+
+        <footer>
+            <p>Generated by autoBot Backtester</p>
+        </footer>
+    </div>
+
+    <script>
+        const equityData = [{"x": "2025-12-17T14:20:00+00:00", "y": 99217.01516881392}, {"x": "2025-12-17T14:34:00+00:00", "y": 100275.00156057256}, {"x": "2025-12-17T14:47:00+00:00", "y": 103828.06413577059}, {"x": "2025-12-17T14:54:00+00:00", "y": 102685.16515522344}, {"x": "2025-12-17T15:07:00+00:00", "y": 105466.35124929306}, {"x": "2025-12-17T15:14:00+00:00", "y": 105554.9709643696}, {"x": "2025-12-17T15:27:00+00:00", "y": 105554.9709643696}, {"x": "2025-12-17T15:34:00+00:00", "y": 106865.44824292975}, {"x": "2025-12-17T15:47:00+00:00", "y": 106865.44824292975}, {"x": "2025-12-17T15:54:00+00:00", "y": 108176.35379881272}, {"x": "2025-12-17T16:07:00+00:00", "y": 100180.43148691962}, {"x": "2025-12-17T16:14:00+00:00", "y": 100180.43148691964}, {"x": "2025-12-17T16:27:00+00:00", "y": 102642.5674763113}, {"x": "2025-12-17T16:35:00+00:00", "y": 102642.5674763113}, {"x": "2025-12-17T16:47:00+00:00", "y": 103602.4834026676}, {"x": "2025-12-17T16:55:00+00:00", "y": 103602.4834026676}, {"x": "2025-12-17T17:07:00+00:00", "y": 101181.034414865}, {"x": "2025-12-17T17:15:00+00:00", "y": 101181.03441486499}, {"x": "2025-12-17T17:27:00+00:00", "y": 102625.87079063324}, {"x": "2025-12-17T17:36:00+00:00", "y": 102625.87079063324}, {"x": "2025-12-17T17:47:00+00:00", "y": 104224.90315981729}, {"x": "2025-12-17T17:56:00+00:00", "y": 101009.55211120012}, {"x": "2025-12-17T18:07:00+00:00", "y": 98520.65866577609}, {"x": "2025-12-17T18:16:00+00:00", "y": 101365.57357196577}, {"x": "2025-12-17T18:27:00+00:00", "y": 102239.57299682345}, {"x": "2025-12-17T18:36:00+00:00", "y": 99828.47125074813}, {"x": "2025-12-17T18:47:00+00:00", "y": 101896.01525154135}, {"x": "2025-12-17T18:56:00+00:00", "y": 102512.07582509077}, {"x": "2025-12-17T19:07:00+00:00", "y": 104584.7349638594}, {"x": "2025-12-17T19:16:00+00:00", "y": 103691.68327062734}, {"x": "2025-12-17T19:27:00+00:00", "y": 99410.87257443946}, {"x": "2025-12-17T19:36:00+00:00", "y": 100123.80900936262}, {"x": "2025-12-17T19:47:00+00:00", "y": 100256.77438653044}, {"x": "2025-12-17T19:56:00+00:00", "y": 99289.5205218387}, {"x": "2025-12-17T20:07:00+00:00", "y": 100384.67635253728}, {"x": "2025-12-17T20:16:00+00:00", "y": 101083.1744839803}, {"x": "2025-12-17T20:27:00+00:00", "y": 102178.68289947686}, {"x": "2025-12-17T20:36:00+00:00", "y": 102288.09058263074}, {"x": "2025-12-17T20:47:00+00:00", "y": 99280.5439494196}, {"x": "2025-12-17T20:56:00+00:00", "y": 99392.08635784332}, {"x": "2025-12-17T21:09:00+00:00", "y": 100206.82136926404}, {"x": "2025-12-18T13:21:00+00:00", "y": 97634.66685935266}, {"x": "2025-12-18T13:42:00+00:00", "y": 97652.54506880288}, {"x": "2025-12-18T14:33:00+00:00", "y": 100023.28946218995}, {"x": "2025-12-18T14:37:00+00:00", "y": 100401.25954390348}, {"x": "2025-12-18T14:53:00+00:00", "y": 100396.83856090021}, {"x": "2025-12-18T14:57:00+00:00", "y": 97700.29999958411}, {"x": "2025-12-18T15:13:00+00:00", "y": 100326.19621143203}, {"x": "2025-12-18T15:17:00+00:00", "y": 105899.91465519846}, {"x": "2025-12-18T15:33:00+00:00", "y": 101483.72567587922}, {"x": "2025-12-18T15:37:00+00:00", "y": 95701.17127604118}, {"x": "2025-12-18T15:53:00+00:00", "y": 98135.57669962292}, {"x": "2025-12-18T15:57:00+00:00", "y": 100731.74995307514}, {"x": "2025-12-18T16:13:00+00:00", "y": 99326.1225261714}, {"x": "2025-12-18T16:17:00+00:00", "y": 98778.38261372597}, {"x": "2025-12-18T16:33:00+00:00", "y": 99835.7035681243}, {"x": "2025-12-18T16:37:00+00:00", "y": 100235.33651255949}, {"x": "2025-12-18T16:53:00+00:00", "y": 100558.7660416755}, {"x": "2025-12-18T16:57:00+00:00", "y": 100999.06736555684}, {"x": "2025-12-18T17:13:00+00:00", "y": 100999.06736555685}, {"x": "2025-12-18T17:17:00+00:00", "y": 101439.84771001844}, {"x": "2025-12-18T17:33:00+00:00", "y": 99834.18971713401}, {"x": "2025-12-18T17:37:00+00:00", "y": 97074.28584608732}, {"x": "2025-12-18T17:53:00+00:00", "y": 98143.15357401402}, {"x": "2025-12-18T17:57:00+00:00", "y": 100033.75460571454}, {"x": "2025-12-18T18:13:00+00:00", "y": 98483.89646122805}, {"x": "2025-12-18T18:17:00+00:00", "y": 98486.55044088623}, {"x": "2025-12-18T18:33:00+00:00", "y": 99935.5719292977}, {"x": "2025-12-18T18:37:00+00:00", "y": 99940.94160907123}, {"x": "2025-12-18T18:53:00+00:00", "y": 101333.91774168912}, {"x": "2025-12-18T18:57:00+00:00", "y": 101425.44739105109}, {"x": "2025-12-18T19:13:00+00:00", "y": 99497.00197697744}, {"x": "2025-12-18T19:17:00+00:00", "y": 99595.10050059452}, {"x": "2025-12-18T19:33:00+00:00", "y": 100553.59729123364}, {"x": "2025-12-18T19:37:00+00:00", "y": 100553.59729123364}, {"x": "2025-12-18T19:53:00+00:00", "y": 99962.20518403673}, {"x": "2025-12-18T19:57:00+00:00", "y": 99962.20518403673}, {"x": "2025-12-18T20:13:00+00:00", "y": 100125.13669830395}, {"x": "2025-12-18T20:17:00+00:00", "y": 98944.45857768119}, {"x": "2025-12-18T20:33:00+00:00", "y": 98944.85760962285}, {"x": "2025-12-18T20:37:00+00:00", "y": 99932.67073595457}, {"x": "2025-12-18T20:53:00+00:00", "y": 101111.84669340403}, {"x": "2025-12-18T20:57:00+00:00", "y": 103235.2953200318}, {"x": "2025-12-19T13:43:00+00:00", "y": 96741.44199003401}, {"x": "2025-12-19T14:16:00+00:00", "y": 95343.15598996656}, {"x": "2025-12-19T14:36:00+00:00", "y": 99732.52409000305}, {"x": "2025-12-19T14:48:00+00:00", "y": 99956.31185040256}, {"x": "2025-12-19T14:56:00+00:00", "y": 100000.29339123848}, {"x": "2025-12-19T15:08:00+00:00", "y": 100000.6576493233}, {"x": "2025-12-19T15:16:00+00:00", "y": 100527.25027153805}, {"x": "2025-12-19T15:28:00+00:00", "y": 100527.08619131967}, {"x": "2025-12-19T15:36:00+00:00", "y": 97550.82126298954}, {"x": "2025-12-19T15:48:00+00:00", "y": 99145.94151061807}, {"x": "2025-12-19T15:56:00+00:00", "y": 102441.70879761303}, {"x": "2025-12-19T16:08:00+00:00", "y": 99736.16196828595}, {"x": "2025-12-19T16:16:00+00:00", "y": 98212.91592892326}, {"x": "2025-12-19T16:28:00+00:00", "y": 99318.32658644178}, {"x": "2025-12-19T16:36:00+00:00", "y": 99968.44301021755}, {"x": "2025-12-19T16:48:00+00:00", "y": 101024.40536412691}, {"x": "2025-12-19T16:56:00+00:00", "y": 101736.26804702605}, {"x": "2025-12-19T17:08:00+00:00", "y": 100071.47288560179}, {"x": "2025-12-19T17:16:00+00:00", "y": 98420.5403785392}, {"x": "2025-12-19T17:28:00+00:00", "y": 99024.9230037696}, {"x": "2025-12-19T17:36:00+00:00", "y": 100258.2840647461}, {"x": "2025-12-19T17:48:00+00:00", "y": 100258.0356989557}, {"x": "2025-12-19T17:56:00+00:00", "y": 98806.128808652}, {"x": "2025-12-19T18:08:00+00:00", "y": 98806.53683816479}, {"x": "2025-12-19T18:16:00+00:00", "y": 99956.72268928231}, {"x": "2025-12-19T18:28:00+00:00", "y": 100514.03234417076}, {"x": "2025-12-19T18:36:00+00:00", "y": 100690.18278777518}, {"x": "2025-12-19T18:48:00+00:00", "y": 101248.16933736256}, {"x": "2025-12-19T18:56:00+00:00", "y": 100745.42525885855}, {"x": "2025-12-19T19:08:00+00:00", "y": 99276.54012589736}, {"x": "2025-12-19T19:16:00+00:00", "y": 99884.70915259354}, {"x": "2025-12-19T19:28:00+00:00", "y": 100274.26779673061}, {"x": "2025-12-19T19:36:00+00:00", "y": 99779.39255239237}, {"x": "2025-12-19T19:48:00+00:00", "y": 99816.119720948}, {"x": "2025-12-19T19:56:00+00:00", "y": 100099.50596148457}, {"x": "2025-12-19T20:08:00+00:00", "y": 100099.50596148455}, {"x": "2025-12-19T20:16:00+00:00", "y": 100172.41292409942}, {"x": "2025-12-19T20:28:00+00:00", "y": 100172.41292409942}, {"x": "2025-12-19T20:36:00+00:00", "y": 100172.41292409942}, {"x": "2025-12-19T20:48:00+00:00", "y": 100172.41292409942}, {"x": "2025-12-19T20:56:00+00:00", "y": 100172.41292409942}, {"x": "2025-12-19T21:10:00+00:00", "y": 99290.19583631407}, {"x": "2025-12-19T21:37:00+00:00", "y": 98998.47667405469}, {"x": "2025-12-22T13:36:00+00:00", "y": 99813.49614635027}, {"x": "2025-12-22T14:19:00+00:00", "y": 99961.01990084696}, {"x": "2025-12-22T14:44:00+00:00", "y": 100298.97937585592}, {"x": "2025-12-22T14:46:00+00:00", "y": 100824.74136215824}, {"x": "2025-12-22T15:04:00+00:00", "y": 101163.71894121268}, {"x": "2025-12-22T15:06:00+00:00", "y": 101690.34269779564}, {"x": "2025-12-22T15:24:00+00:00", "y": 99751.31301906821}, {"x": "2025-12-22T15:26:00+00:00", "y": 98184.74160824277}, {"x": "2025-12-22T15:44:00+00:00", "y": 99441.6502368748}, {"x": "2025-12-22T15:46:00+00:00", "y": 99953.99888556391}, {"x": "2025-12-22T16:04:00+00:00", "y": 99985.88004975505}, {"x": "2025-12-22T16:06:00+00:00", "y": 99986.26208319195}, {"x": "2025-12-22T16:24:00+00:00", "y": 99614.85139001909}, {"x": "2025-12-22T16:26:00+00:00", "y": 99921.97395419907}, {"x": "2025-12-22T16:44:00+00:00", "y": 100470.02477677604}, {"x": "2025-12-22T16:46:00+00:00", "y": 100776.67022163108}, {"x": "2025-12-22T17:04:00+00:00", "y": 100485.64320098475}, {"x": "2025-12-22T17:06:00+00:00", "y": 99828.15436844647}, {"x": "2025-12-22T17:24:00+00:00", "y": 99908.81617573953}, {"x": "2025-12-22T17:26:00+00:00", "y": 100448.91816077648}, {"x": "2025-12-22T17:44:00+00:00", "y": 100448.86607040821}, {"x": "2025-12-22T17:46:00+00:00", "y": 99886.15691279901}, {"x": "2025-12-22T18:04:00+00:00", "y": 99886.22855515694}, {"x": "2025-12-22T18:06:00+00:00", "y": 100353.23872974487}, {"x": "2025-12-22T18:24:00+00:00", "y": 100571.22786149615}, {"x": "2025-12-22T18:26:00+00:00", "y": 100972.57053516824}, {"x": "2025-12-22T18:44:00+00:00", "y": 100447.3385497286}, {"x": "2025-12-22T18:46:00+00:00", "y": 100447.3385497286}, {"x": "2025-12-22T19:04:00+00:00", "y": 100753.82748383285}, {"x": "2025-12-22T19:06:00+00:00", "y": 100753.82748383285}, {"x": "2025-12-22T19:24:00+00:00", "y": 100753.98599815059}, {"x": "2025-12-22T19:26:00+00:00", "y": 99512.94201445386}, {"x": "2025-12-22T19:44:00+00:00", "y": 99811.49404106058}, {"x": "2025-12-22T19:46:00+00:00", "y": 100322.76611326402}, {"x": "2025-12-22T20:04:00+00:00", "y": 100621.36270926287}, {"x": "2025-12-22T20:06:00+00:00", "y": 100402.25712345981}, {"x": "2025-12-22T20:24:00+00:00", "y": 99441.50541599179}, {"x": "2025-12-22T20:26:00+00:00", "y": 99587.54891846728}, {"x": "2025-12-22T20:44:00+00:00", "y": 100055.79378577328}, {"x": "2025-12-22T20:46:00+00:00", "y": 100398.70329104809}, {"x": "2025-12-22T21:04:00+00:00", "y": 100124.05577985839}, {"x": "2025-12-22T21:28:00+00:00", "y": 100467.09393007979}, {"x": "2025-12-23T14:30:00+00:00", "y": 100636.85168344055}, {"x": "2025-12-23T14:39:00+00:00", "y": 97573.16810325591}, {"x": "2025-12-23T14:50:00+00:00", "y": 97573.21187929835}, {"x": "2025-12-23T14:59:00+00:00", "y": 100662.9709408909}, {"x": "2025-12-23T15:10:00+00:00", "y": 101566.47736470436}, {"x": "2025-12-23T15:19:00+00:00", "y": 100282.48640691486}, {"x": "2025-12-23T15:30:00+00:00", "y": 99027.91085581308}, {"x": "2025-12-23T15:39:00+00:00", "y": 99598.40682907138}, {"x": "2025-12-23T15:50:00+00:00", "y": 99946.38113050578}, {"x": "2025-12-23T15:59:00+00:00", "y": 99946.97938399916}, {"x": "2025-12-23T16:10:00+00:00", "y": 99995.57302764145}, {"x": "2025-12-23T16:19:00+00:00", "y": 99996.13804482965}, {"x": "2025-12-23T16:30:00+00:00", "y": 100044.50096014618}, {"x": "2025-12-23T16:39:00+00:00", "y": 100044.30154231505}, {"x": "2025-12-23T16:50:00+00:00", "y": 99254.50865050504}, {"x": "2025-12-23T16:59:00+00:00", "y": 99255.14014030361}, {"x": "2025-12-23T17:10:00+00:00", "y": 99948.25210354365}, {"x": "2025-12-23T17:19:00+00:00", "y": 99948.36012153552}, {"x": "2025-12-23T17:30:00+00:00", "y": 100172.98969793152}, {"x": "2025-12-23T17:39:00+00:00", "y": 100180.1470646958}, {"x": "2025-12-23T17:50:00+00:00", "y": 100405.51368789874}, {"x": "2025-12-23T17:59:00+00:00", "y": 100303.59949954934}, {"x": "2025-12-23T18:10:00+00:00", "y": 99409.70387194348}, {"x": "2025-12-23T18:19:00+00:00", "y": 99504.43538870069}, {"x": "2025-12-23T18:30:00+00:00", "y": 100011.59688566206}, {"x": "2025-12-23T18:39:00+00:00", "y": 100011.65473313029}, {"x": "2025-12-23T18:50:00+00:00", "y": 100076.04675173992}, {"x": "2025-12-23T18:59:00+00:00", "y": 100192.30748285542}, {"x": "2025-12-23T19:10:00+00:00", "y": 99669.00325227808}, {"x": "2025-12-23T19:19:00+00:00", "y": 99450.69640569392}, {"x": "2025-12-23T19:30:00+00:00", "y": 100053.955980504}, {"x": "2025-12-23T19:39:00+00:00", "y": 100301.02789923771}, {"x": "2025-12-23T19:50:00+00:00", "y": 99954.93661151835}, {"x": "2025-12-23T19:59:00+00:00", "y": 99794.909150226}, {"x": "2025-12-23T20:10:00+00:00", "y": 99931.79402525933}, {"x": "2025-12-23T20:19:00+00:00", "y": 99946.33538033885}, {"x": "2025-12-23T20:30:00+00:00", "y": 100131.11205320265}, {"x": "2025-12-23T20:39:00+00:00", "y": 100131.1116304923}, {"x": "2025-12-23T20:50:00+00:00", "y": 99817.32308171218}, {"x": "2025-12-23T20:59:00+00:00", "y": 99824.58257992452}, {"x": "2025-12-23T21:24:00+00:00", "y": 99953.34216961506}, {"x": "2025-12-24T14:04:00+00:00", "y": 99495.31984584447}, {"x": "2025-12-24T14:41:00+00:00", "y": 99495.25781085822}, {"x": "2025-12-24T14:49:00+00:00", "y": 99946.20022311634}, {"x": "2025-12-24T15:01:00+00:00", "y": 99946.3015469272}, {"x": "2025-12-24T15:09:00+00:00", "y": 99947.02196960131}, {"x": "2025-12-24T15:21:00+00:00", "y": 99947.19359972993}, {"x": "2025-12-24T15:29:00+00:00", "y": 99947.53416317588}, {"x": "2025-12-24T15:41:00+00:00", "y": 99947.45144986088}, {"x": "2025-12-24T15:49:00+00:00", "y": 99947.61518228681}, {"x": "2025-12-24T16:01:00+00:00", "y": 99947.69169210318}, {"x": "2025-12-24T16:09:00+00:00", "y": 99948.07155133135}, {"x": "2025-12-24T16:21:00+00:00", "y": 99948.26385978873}, {"x": "2025-12-24T16:29:00+00:00", "y": 99948.76160636357}, {"x": "2025-12-24T16:41:00+00:00", "y": 99949.01181414143}, {"x": "2025-12-24T16:49:00+00:00", "y": 99949.52920860738}, {"x": "2025-12-24T17:02:00+00:00", "y": 100109.69225681848}, {"x": "2025-12-24T17:09:00+00:00", "y": 100109.95422869998}, {"x": "2025-12-24T17:23:00+00:00", "y": 100270.20807078571}, {"x": "2025-12-24T17:29:00+00:00", "y": 100270.26046516199}, {"x": "2025-12-24T17:43:00+00:00", "y": 100270.260465162}, {"x": "2025-12-24T17:49:00+00:00", "y": 100595.51994486769}, {"x": "2025-12-24T18:05:00+00:00", "y": 100595.51994486767}, {"x": "2025-12-26T14:34:00+00:00", "y": 100595.51994486767}, {"x": "2025-12-26T14:36:00+00:00", "y": 98769.05505543738}, {"x": "2025-12-26T14:54:00+00:00", "y": 98769.05505543738}, {"x": "2025-12-26T14:56:00+00:00", "y": 101335.10160687118}, {"x": "2025-12-26T15:14:00+00:00", "y": 101335.10160687118}, {"x": "2025-12-26T15:16:00+00:00", "y": 102405.26994145791}, {"x": "2025-12-26T15:35:00+00:00", "y": 101715.89193194297}, {"x": "2025-12-26T15:39:00+00:00", "y": 99444.26163302765}, {"x": "2025-12-26T15:55:00+00:00", "y": 99812.81794214077}, {"x": "2025-12-26T15:59:00+00:00", "y": 99943.08864339297}, {"x": "2025-12-26T16:15:00+00:00", "y": 101797.90035454644}, {"x": "2025-12-26T16:19:00+00:00", "y": 102644.56517055497}, {"x": "2025-12-26T16:36:00+00:00", "y": 100647.70465575806}, {"x": "2025-12-26T16:40:00+00:00", "y": 101494.82480925338}, {"x": "2025-12-26T16:56:00+00:00", "y": 101807.0358849831}, {"x": "2025-12-26T17:02:00+00:00", "y": 101807.03588498308}, {"x": "2025-12-26T17:16:00+00:00", "y": 101983.2275815491}, {"x": "2025-12-26T17:23:00+00:00", "y": 101983.22758154912}, {"x": "2025-12-26T17:37:00+00:00", "y": 101983.22758154912}, {"x": "2025-12-26T17:45:00+00:00", "y": 101983.2275815491}, {"x": "2025-12-26T17:57:00+00:00", "y": 101606.77256135926}, {"x": "2025-12-26T18:08:00+00:00", "y": 99745.49374332327}, {"x": "2025-12-26T18:17:00+00:00", "y": 100194.0273376381}, {"x": "2025-12-26T18:29:00+00:00", "y": 100433.0245046154}, {"x": "2025-12-26T18:37:00+00:00", "y": 99575.01451846496}, {"x": "2025-12-26T18:52:00+00:00", "y": 99147.24681506045}, {"x": "2025-12-26T18:57:00+00:00", "y": 99580.31877290473}, {"x": "2025-12-26T19:13:00+00:00", "y": 99935.2239789444}, {"x": "2025-12-26T19:17:00+00:00", "y": 100207.14066881908}, {"x": "2025-12-26T19:35:00+00:00", "y": 99917.27761541703}, {"x": "2025-12-26T19:37:00+00:00", "y": 99564.91697679549}, {"x": "2025-12-26T19:56:00+00:00", "y": 99890.72942742555}, {"x": "2025-12-26T19:57:00+00:00", "y": 99970.8652508917}, {"x": "2025-12-26T20:16:00+00:00", "y": 99738.96499155155}, {"x": "2025-12-26T20:17:00+00:00", "y": 99850.94261994502}, {"x": "2025-12-26T20:37:00+00:00", "y": 99963.10233538001}, {"x": "2025-12-26T20:38:00+00:00", "y": 100158.83102546264}, {"x": "2025-12-26T20:57:00+00:00", "y": 100158.83102546263}, {"x": "2025-12-26T20:58:00+00:00", "y": 100281.76538295712}, {"x": "2025-12-29T14:01:00+00:00", "y": 100281.76538295712}, {"x": "2025-12-29T14:38:00+00:00", "y": 97137.44531026062}, {"x": "2025-12-29T14:47:00+00:00", "y": 97137.44531026062}, {"x": "2025-12-29T14:58:00+00:00", "y": 100399.33725280089}, {"x": "2025-12-29T15:07:00+00:00", "y": 100399.33725280089}, {"x": "2025-12-29T15:18:00+00:00", "y": 99649.87278036904}, {"x": "2025-12-29T15:27:00+00:00", "y": 98039.74841986888}, {"x": "2025-12-29T15:38:00+00:00", "y": 98534.6905617703}, {"x": "2025-12-29T15:47:00+00:00", "y": 100820.13432596801}, {"x": "2025-12-29T15:58:00+00:00", "y": 101089.08878815059}, {"x": "2025-12-29T16:07:00+00:00", "y": 101990.52625897464}, {"x": "2025-12-29T16:18:00+00:00", "y": 102259.50761929325}, {"x": "2025-12-29T16:28:00+00:00", "y": 99957.84641054069}, {"x": "2025-12-29T16:38:00+00:00", "y": 99957.84641054069}, {"x": "2025-12-29T16:48:00+00:00", "y": 100458.2063352317}, {"x": "2025-12-29T16:58:00+00:00", "y": 99716.6146127346}, {"x": "2025-12-29T17:08:00+00:00", "y": 100755.5855508935}, {"x": "2025-12-29T17:18:00+00:00", "y": 100959.12289930157}, {"x": "2025-12-29T17:28:00+00:00", "y": 101999.10161601657}, {"x": "2025-12-29T17:38:00+00:00", "y": 101998.80508860246}, {"x": "2025-12-29T17:48:00+00:00", "y": 99336.72954017554}, {"x": "2025-12-29T17:58:00+00:00", "y": 99337.16247020016}, {"x": "2025-12-29T18:08:00+00:00", "y": 100039.92077749349}, {"x": "2025-12-29T18:18:00+00:00", "y": 100040.00380516946}, {"x": "2025-12-29T18:28:00+00:00", "y": 99604.29449940505}, {"x": "2025-12-29T18:38:00+00:00", "y": 99604.57323517432}, {"x": "2025-12-29T18:48:00+00:00", "y": 100515.30324344126}, {"x": "2025-12-29T18:58:00+00:00", "y": 100871.29173745982}, {"x": "2025-12-29T19:08:00+00:00", "y": 101467.5850493049}, {"x": "2025-12-29T19:18:00+00:00", "y": 101103.95047191557}, {"x": "2025-12-29T19:28:00+00:00", "y": 99023.1593983469}, {"x": "2025-12-29T19:38:00+00:00", "y": 99030.45348291151}, {"x": "2025-12-29T19:48:00+00:00", "y": 99920.65971067066}, {"x": "2025-12-29T19:58:00+00:00", "y": 99920.67348327588}, {"x": "2025-12-29T20:08:00+00:00", "y": 100587.80337876973}, {"x": "2025-12-29T20:18:00+00:00", "y": 100587.80454414402}, {"x": "2025-12-29T20:28:00+00:00", "y": 101255.38813284812}, {"x": "2025-12-29T20:38:00+00:00", "y": 101429.7061329247}, {"x": "2025-12-29T20:48:00+00:00", "y": 101429.7061329247}, {"x": "2025-12-29T20:58:00+00:00", "y": 101604.05124908213}, {"x": "2025-12-30T13:31:00+00:00", "y": 101604.05124908214}, {"x": "2025-12-30T14:31:00+00:00", "y": 101604.05124908214}, {"x": "2025-12-30T14:43:00+00:00", "y": 101604.05124908214}, {"x": "2025-12-30T14:51:00+00:00", "y": 100214.82754588107}, {"x": "2025-12-30T15:03:00+00:00", "y": 98509.38778255683}, {"x": "2025-12-30T15:11:00+00:00", "y": 100564.61461229366}, {"x": "2025-12-30T15:23:00+00:00", "y": 100934.47281862852}, {"x": "2025-12-30T15:31:00+00:00", "y": 101951.91467909366}, {"x": "2025-12-30T15:43:00+00:00", "y": 102209.04406711707}, {"x": "2025-12-30T15:51:00+00:00", "y": 99285.05020142708}, {"x": "2025-12-30T16:03:00+00:00", "y": 98638.89594719393}, {"x": "2025-12-30T16:11:00+00:00", "y": 99527.81931778188}, {"x": "2025-12-30T16:23:00+00:00", "y": 99915.19621053265}, {"x": "2025-12-30T16:31:00+00:00", "y": 100452.52700702372}, {"x": "2025-12-30T16:43:00+00:00", "y": 101721.75776656583}, {"x": "2025-12-30T16:51:00+00:00", "y": 102259.1423015104}, {"x": "2025-12-30T17:03:00+00:00", "y": 103529.91296761921}, {"x": "2025-12-30T17:11:00+00:00", "y": 102398.04546448654}, {"x": "2025-12-30T17:23:00+00:00", "y": 99599.47935801778}, {"x": "2025-12-30T17:31:00+00:00", "y": 99657.72090182177}, {"x": "2025-12-30T17:43:00+00:00", "y": 100020.33728358657}, {"x": "2025-12-30T17:51:00+00:00", "y": 100020.33696761478}, {"x": "2025-12-30T18:03:00+00:00", "y": 100125.06166250333}, {"x": "2025-12-30T18:11:00+00:00", "y": 99564.84268971127}, {"x": "2025-12-30T18:24:00+00:00", "y": 99564.84268971125}, {"x": "2025-12-30T18:31:00+00:00", "y": 100125.07751154661}, {"x": "2025-12-30T18:44:00+00:00", "y": 100125.07751154661}, {"x": "2025-12-30T18:51:00+00:00", "y": 100125.0938018439}, {"x": "2025-12-30T19:04:00+00:00", "y": 100125.0938018439}, {"x": "2025-12-30T19:11:00+00:00", "y": 100349.90798184962}, {"x": "2025-12-30T19:24:00+00:00", "y": 99930.8587343088}, {"x": "2025-12-30T19:31:00+00:00", "y": 100156.21985733409}, {"x": "2025-12-30T19:44:00+00:00", "y": 100478.06037806922}, {"x": "2025-12-30T19:51:00+00:00", "y": 100478.06037806922}, {"x": "2025-12-30T20:04:00+00:00", "y": 100590.83627624883}, {"x": "2025-12-30T20:11:00+00:00", "y": 100590.83627624883}, {"x": "2025-12-30T20:24:00+00:00", "y": 99720.03783833605}, {"x": "2025-12-30T20:31:00+00:00", "y": 99720.03783833605}, {"x": "2025-12-30T20:44:00+00:00", "y": 100437.10916254969}, {"x": "2025-12-30T20:51:00+00:00", "y": 100437.10916254969}, {"x": "2025-12-30T21:06:00+00:00", "y": 100509.6599682668}, {"x": "2025-12-30T21:17:00+00:00", "y": 100030.09575837477}, {"x": "2025-12-31T14:42:00+00:00", "y": 100030.09575837478}, {"x": "2025-12-31T14:44:00+00:00", "y": 101420.37350408842}, {"x": "2025-12-31T15:02:00+00:00", "y": 101420.37350408842}, {"x": "2025-12-31T15:04:00+00:00", "y": 102781.78937659558}, {"x": "2025-12-31T15:22:00+00:00", "y": 102781.78937659558}, {"x": "2025-12-31T15:24:00+00:00", "y": 102781.78937659558}, {"x": "2025-12-31T15:42:00+00:00", "y": 102781.78937659558}, {"x": "2025-12-31T15:44:00+00:00", "y": 102781.78937659558}, {"x": "2025-12-31T16:02:00+00:00", "y": 102781.78937659558}, {"x": "2025-12-31T16:04:00+00:00", "y": 102781.78937659558}, {"x": "2025-12-31T16:22:00+00:00", "y": 102232.08297532608}, {"x": "2025-12-31T16:24:00+00:00", "y": 99030.17666480828}, {"x": "2025-12-31T16:42:00+00:00", "y": 99775.23169350077}, {"x": "2025-12-31T16:44:00+00:00", "y": 100257.30549928319}, {"x": "2025-12-31T17:02:00+00:00", "y": 99495.19573765226}, {"x": "2025-12-31T17:04:00+00:00", "y": 99495.74475155755}, {"x": "2025-12-31T17:22:00+00:00", "y": 99916.19781424552}, {"x": "2025-12-31T17:24:00+00:00", "y": 100002.9953627696}, {"x": "2025-12-31T17:42:00+00:00", "y": 100181.04444361506}, {"x": "2025-12-31T17:44:00+00:00", "y": 100268.6407996066}, {"x": "2025-12-31T18:02:00+00:00", "y": 99993.31753138077}, {"x": "2025-12-31T18:04:00+00:00", "y": 99993.31753138076}, {"x": "2025-12-31T18:22:00+00:00", "y": 100430.43258822207}, {"x": "2025-12-31T18:24:00+00:00", "y": 100430.43258822209}, {"x": "2025-12-31T18:42:00+00:00", "y": 99522.95112433274}, {"x": "2025-12-31T18:44:00+00:00", "y": 99055.70634173047}, {"x": "2025-12-31T19:02:00+00:00", "y": 99622.70950187086}, {"x": "2025-12-31T19:04:00+00:00", "y": 99914.79049470868}, {"x": "2025-12-31T19:22:00+00:00", "y": 100940.05861566216}, {"x": "2025-12-31T19:24:00+00:00", "y": 101609.9667780071}, {"x": "2025-12-31T19:42:00+00:00", "y": 102636.9680152604}, {"x": "2025-12-31T19:44:00+00:00", "y": 101360.91661623148}, {"x": "2025-12-31T20:02:00+00:00", "y": 101360.9166162315}, {"x": "2025-12-31T20:04:00+00:00", "y": 102696.19258059135}, {"x": "2025-12-31T20:23:00+00:00", "y": 102696.19258059133}, {"x": "2025-12-31T20:24:00+00:00", "y": 103427.07987776997}, {"x": "2025-12-31T20:43:00+00:00", "y": 101274.28509550644}, {"x": "2025-12-31T20:44:00+00:00", "y": 99658.76494975878}, {"x": "2025-12-31T21:05:00+00:00", "y": 101015.57248777398}, {"x": "2026-01-02T13:24:00+00:00", "y": 101170.27356506347}, {"x": "2026-01-02T14:30:00+00:00", "y": 89890.42626409871}, {"x": "2026-01-02T14:48:00+00:00", "y": 89890.57465263148}, {"x": "2026-01-02T14:50:00+00:00", "y": 99943.98768152934}, {"x": "2026-01-02T15:08:00+00:00", "y": 100351.82744561089}, {"x": "2026-01-02T15:10:00+00:00", "y": 103553.75104561314}, {"x": "2026-01-02T15:28:00+00:00", "y": 103961.77156321627}, {"x": "2026-01-02T15:30:00+00:00", "y": 107257.90945433133}, {"x": "2026-01-02T15:48:00+00:00", "y": 105419.32279593026}, {"x": "2026-01-02T15:50:00+00:00", "y": 105419.32279593026}, {"x": "2026-01-02T16:08:00+00:00", "y": 106802.8856666268}, {"x": "2026-01-02T16:10:00+00:00", "y": 99697.3227580491}, {"x": "2026-01-02T16:28:00+00:00", "y": 98067.13849247682}, {"x": "2026-01-02T16:30:00+00:00", "y": 98655.25711622104}, {"x": "2026-01-02T16:48:00+00:00", "y": 101034.1823681006}, {"x": "2026-01-02T16:51:00+00:00", "y": 103054.86053761443}, {"x": "2026-01-02T17:08:00+00:00", "y": 101389.4437543436}, {"x": "2026-01-02T17:11:00+00:00", "y": 98705.75046441972}, {"x": "2026-01-02T17:28:00+00:00", "y": 99324.14098575643}, {"x": "2026-01-02T17:31:00+00:00", "y": 99979.9214750034}, {"x": "2026-01-02T17:48:00+00:00", "y": 100053.20570790084}, {"x": "2026-01-02T17:51:00+00:00", "y": 101241.55248651383}, {"x": "2026-01-02T18:08:00+00:00", "y": 101241.55248651383}, {"x": "2026-01-02T18:11:00+00:00", "y": 102433.50598399928}, {"x": "2026-01-02T18:28:00+00:00", "y": 102433.50598399929}, {"x": "2026-01-02T18:31:00+00:00", "y": 102433.50598399929}, {"x": "2026-01-02T18:48:00+00:00", "y": 102433.50598399929}, {"x": "2026-01-02T18:51:00+00:00", "y": 102433.50598399929}, {"x": "2026-01-02T19:08:00+00:00", "y": 100471.25101642006}, {"x": "2026-01-02T19:11:00+00:00", "y": 95414.83463260134}, {"x": "2026-01-02T19:28:00+00:00", "y": 97236.97202351637}, {"x": "2026-01-02T19:31:00+00:00", "y": 99917.53089963106}, {"x": "2026-01-02T19:48:00+00:00", "y": 100315.47107510516}, {"x": "2026-01-02T19:51:00+00:00", "y": 101305.45483416966}, {"x": "2026-01-02T20:08:00+00:00", "y": 100478.5423676817}, {"x": "2026-01-02T20:11:00+00:00", "y": 98783.97322494717}, {"x": "2026-01-02T20:28:00+00:00", "y": 99252.33482037624}, {"x": "2026-01-02T20:31:00+00:00", "y": 100425.08488506603}, {"x": "2026-01-02T20:48:00+00:00", "y": 100461.66802024054}, {"x": "2026-01-02T20:51:00+00:00", "y": 100933.70396008034}, {"x": "2026-01-02T21:43:00+00:00", "y": 99859.95937006689}, {"x": "2026-01-05T14:28:00+00:00", "y": 99992.71183388068}, {"x": "2026-01-05T14:30:00+00:00", "y": 93247.07603907735}, {"x": "2026-01-05T14:48:00+00:00", "y": 93246.50864409904}, {"x": "2026-01-05T14:50:00+00:00", "y": 100140.293360531}, {"x": "2026-01-05T15:08:00+00:00", "y": 98262.74881376707}, {"x": "2026-01-05T15:10:00+00:00", "y": 97410.44349525783}, {"x": "2026-01-05T15:28:00+00:00", "y": 99293.65610323854}, {"x": "2026-01-05T15:30:00+00:00", "y": 99906.761085639}, {"x": "2026-01-05T15:48:00+00:00", "y": 100192.24910693713}, {"x": "2026-01-05T15:50:00+00:00", "y": 100336.73819628646}, {"x": "2026-01-05T16:08:00+00:00", "y": 99286.8229939743}, {"x": "2026-01-05T16:10:00+00:00", "y": 98567.20391134295}, {"x": "2026-01-05T16:28:00+00:00", "y": 99325.6597248338}, {"x": "2026-01-05T16:30:00+00:00", "y": 99899.84520662393}, {"x": "2026-01-05T16:48:00+00:00", "y": 99900.50535797229}, {"x": "2026-01-05T16:50:00+00:00", "y": 99901.55580467032}, {"x": "2026-01-05T17:08:00+00:00", "y": 100301.79808996506}, {"x": "2026-01-05T17:10:00+00:00", "y": 100547.48708664534}, {"x": "2026-01-05T17:28:00+00:00", "y": 100950.86253237522}, {"x": "2026-01-05T17:30:00+00:00", "y": 101197.59693005274}, {"x": "2026-01-05T17:48:00+00:00", "y": 100213.39669771699}, {"x": "2026-01-05T17:50:00+00:00", "y": 99618.29912988556}, {"x": "2026-01-05T18:08:00+00:00", "y": 100716.44924840101}, {"x": "2026-01-05T18:10:00+00:00", "y": 100941.47398869204}, {"x": "2026-01-05T18:28:00+00:00", "y": 98512.84688297343}, {"x": "2026-01-05T18:30:00+00:00", "y": 97458.79093836798}, {"x": "2026-01-05T18:48:00+00:00", "y": 98967.58368485078}, {"x": "2026-01-05T18:50:00+00:00", "y": 99897.990894831}, {"x": "2026-01-05T19:08:00+00:00", "y": 99968.18704033988}, {"x": "2026-01-05T19:10:00+00:00", "y": 100417.27944690001}, {"x": "2026-01-05T19:28:00+00:00", "y": 100490.03905723193}, {"x": "2026-01-05T19:30:00+00:00", "y": 100940.18208654928}, {"x": "2026-01-05T19:48:00+00:00", "y": 100576.18008252062}, {"x": "2026-01-05T19:50:00+00:00", "y": 100576.18008252062}, {"x": "2026-01-05T20:08:00+00:00", "y": 100794.83084405134}, {"x": "2026-01-05T20:10:00+00:00", "y": 99342.06551529386}, {"x": "2026-01-05T20:28:00+00:00", "y": 99350.20938462169}, {"x": "2026-01-05T20:30:00+00:00", "y": 99902.9142742933}, {"x": "2026-01-05T20:48:00+00:00", "y": 99636.01914477398}, {"x": "2026-01-05T20:50:00+00:00", "y": 99838.78262648598}, {"x": "2026-01-05T21:11:00+00:00", "y": 100112.9765839632}, {"x": "2026-01-05T21:20:00+00:00", "y": 99793.0417948233}, {"x": "2026-01-06T13:50:00+00:00", "y": 98935.26987454045}, {"x": "2026-01-06T14:38:00+00:00", "y": 99051.7860114426}, {"x": "2026-01-06T14:42:00+00:00", "y": 100765.80376403427}, {"x": "2026-01-06T14:58:00+00:00", "y": 100766.48569353977}, {"x": "2026-01-06T15:02:00+00:00", "y": 98952.92981113086}, {"x": "2026-01-06T15:18:00+00:00", "y": 98953.03641549525}, {"x": "2026-01-06T15:22:00+00:00", "y": 99885.99821994193}, {"x": "2026-01-06T15:38:00+00:00", "y": 100660.43988276346}, {"x": "2026-01-06T15:42:00+00:00", "y": 101687.36405780623}, {"x": "2026-01-06T15:58:00+00:00", "y": 102462.07517020448}, {"x": "2026-01-06T16:02:00+00:00", "y": 103490.79907035411}, {"x": "2026-01-06T16:18:00+00:00", "y": 101391.51747857907}, {"x": "2026-01-06T16:22:00+00:00", "y": 98731.54700365607}, {"x": "2026-01-06T16:38:00+00:00", "y": 99283.65020945246}, {"x": "2026-01-06T16:42:00+00:00", "y": 99887.80576343808}, {"x": "2026-01-06T16:58:00+00:00", "y": 99888.358534331}, {"x": "2026-01-06T17:02:00+00:00", "y": 100644.68631886781}, {"x": "2026-01-06T17:18:00+00:00", "y": 100645.71976010238}, {"x": "2026-01-06T17:22:00+00:00", "y": 98902.08636647543}, {"x": "2026-01-06T17:38:00+00:00", "y": 98903.6325227411}, {"x": "2026-01-06T17:42:00+00:00", "y": 99888.13409855992}, {"x": "2026-01-06T17:58:00+00:00", "y": 99888.08603152576}, {"x": "2026-01-06T18:02:00+00:00", "y": 99887.26440997283}, {"x": "2026-01-06T18:18:00+00:00", "y": 99887.52877866075}, {"x": "2026-01-06T18:22:00+00:00", "y": 99888.76121099012}, {"x": "2026-01-06T18:38:00+00:00", "y": 99888.4407640957}, {"x": "2026-01-06T18:42:00+00:00", "y": 99888.04575373372}, {"x": "2026-01-06T18:58:00+00:00", "y": 99889.18334020898}, {"x": "2026-01-06T19:02:00+00:00", "y": 99891.6798056967}, {"x": "2026-01-06T19:18:00+00:00", "y": 99892.17649838308}, {"x": "2026-01-06T19:22:00+00:00", "y": 99892.79271454776}, {"x": "2026-01-06T19:38:00+00:00", "y": 99950.31372233613}, {"x": "2026-01-06T19:42:00+00:00", "y": 99950.89833767187}, {"x": "2026-01-06T19:58:00+00:00", "y": 100008.70180587991}, {"x": "2026-01-06T20:02:00+00:00", "y": 100088.01700744285}, {"x": "2026-01-06T20:18:00+00:00", "y": 99900.09644701236}, {"x": "2026-01-06T20:22:00+00:00", "y": 99771.72554308717}, {"x": "2026-01-06T20:38:00+00:00", "y": 99843.99770776782}, {"x": "2026-01-06T20:42:00+00:00", "y": 99892.18756557375}, {"x": "2026-01-06T20:58:00+00:00", "y": 100079.91647175641}, {"x": "2026-01-06T21:02:00+00:00", "y": 100272.22242023815}, {"x": "2026-01-06T21:30:00+00:00", "y": 100460.05112046376}, {"x": "2026-01-06T21:57:00+00:00", "y": 99898.52558858019}, {"x": "2026-01-07T14:32:00+00:00", "y": 99320.4170485528}, {"x": "2026-01-07T14:33:00+00:00", "y": 99688.40601907535}, {"x": "2026-01-07T14:52:00+00:00", "y": 99891.24322724949}, {"x": "2026-01-07T14:53:00+00:00", "y": 99893.2469359697}, {"x": "2026-01-07T15:12:00+00:00", "y": 99899.89295333985}, {"x": "2026-01-07T15:13:00+00:00", "y": 99899.4614762408}, {"x": "2026-01-07T15:32:00+00:00", "y": 98980.93808286784}, {"x": "2026-01-07T15:33:00+00:00", "y": 98981.67100287172}, {"x": "2026-01-07T15:52:00+00:00", "y": 99893.5394851899}, {"x": "2026-01-07T15:53:00+00:00", "y": 99894.30786906491}, {"x": "2026-01-07T16:12:00+00:00", "y": 100046.060620871}, {"x": "2026-01-07T16:13:00+00:00", "y": 100046.46254474408}, {"x": "2026-01-07T16:32:00+00:00", "y": 99793.74896603347}, {"x": "2026-01-07T16:33:00+00:00", "y": 99793.04411664032}, {"x": "2026-01-07T16:52:00+00:00", "y": 99894.35355884673}, {"x": "2026-01-07T16:53:00+00:00", "y": 99447.45995676586}, {"x": "2026-01-07T17:12:00+00:00", "y": 99447.61179674645}, {"x": "2026-01-07T17:13:00+00:00", "y": 99895.1494622032}, {"x": "2026-01-07T17:32:00+00:00", "y": 100421.05883390851}, {"x": "2026-01-07T17:33:00+00:00", "y": 100644.13818971923}, {"x": "2026-01-07T17:52:00+00:00", "y": 101170.23398239427}, {"x": "2026-01-07T17:53:00+00:00", "y": 101393.2455949273}, {"x": "2026-01-07T18:12:00+00:00", "y": 101393.2455949273}, {"x": "2026-01-07T18:13:00+00:00", "y": 101393.2455949273}, {"x": "2026-01-07T18:32:00+00:00", "y": 101393.24559492728}, {"x": "2026-01-07T18:33:00+00:00", "y": 101393.2455949273}, {"x": "2026-01-07T18:52:00+00:00", "y": 99908.17439727215}, {"x": "2026-01-07T18:53:00+00:00", "y": 99246.9065554983}, {"x": "2026-01-07T19:12:00+00:00", "y": 100912.28369466297}, {"x": "2026-01-07T19:13:00+00:00", "y": 102625.63004414544}, {"x": "2026-01-07T19:32:00+00:00", "y": 100877.20216941122}, {"x": "2026-01-07T19:33:00+00:00", "y": 98984.80393607434}, {"x": "2026-01-07T19:52:00+00:00", "y": 99577.04364127538}, {"x": "2026-01-07T19:53:00+00:00", "y": 100008.2200156493}, {"x": "2026-01-07T20:12:00+00:00", "y": 100087.70897391046}, {"x": "2026-01-07T20:13:00+00:00", "y": 100127.64348131848}, {"x": "2026-01-07T20:32:00+00:00", "y": 100127.64348131849}, {"x": "2026-01-07T20:33:00+00:00", "y": 100127.64348131849}, {"x": "2026-01-07T20:52:00+00:00", "y": 99802.33201177127}, {"x": "2026-01-07T20:53:00+00:00", "y": 99490.30282975247}, {"x": "2026-01-07T21:16:00+00:00", "y": 99932.16582445067}, {"x": "2026-01-07T21:49:00+00:00", "y": 100164.30260744115}, {"x": "2026-01-08T14:36:00+00:00", "y": 100439.86860549772}, {"x": "2026-01-08T14:39:00+00:00", "y": 104080.3515936462}, {"x": "2026-01-08T14:56:00+00:00", "y": 103122.78183486125}, {"x": "2026-01-08T14:59:00+00:00", "y": 106766.14914085594}, {"x": "2026-01-08T15:16:00+00:00", "y": 107174.36507023289}, {"x": "2026-01-08T15:19:00+00:00", "y": 99685.58751507802}, {"x": "2026-01-08T15:36:00+00:00", "y": 100778.86453923478}, {"x": "2026-01-08T15:39:00+00:00", "y": 102244.0430037982}, {"x": "2026-01-08T15:56:00+00:00", "y": 103338.71391382511}, {"x": "2026-01-08T15:59:00+00:00", "y": 100958.31039457044}, {"x": "2026-01-08T16:16:00+00:00", "y": 100958.31039457044}, {"x": "2026-01-08T16:19:00+00:00", "y": 102300.67940673674}, {"x": "2026-01-08T16:36:00+00:00", "y": 102300.67940673674}, {"x": "2026-01-08T16:39:00+00:00", "y": 102534.7372432354}, {"x": "2026-01-08T16:56:00+00:00", "y": 102534.7372432354}, {"x": "2026-01-08T16:59:00+00:00", "y": 101969.0742057727}, {"x": "2026-01-08T17:16:00+00:00", "y": 99602.72910278977}, {"x": "2026-01-08T17:19:00+00:00", "y": 99699.49018151608}, {"x": "2026-01-08T17:36:00+00:00", "y": 99873.683524215}, {"x": "2026-01-08T17:39:00+00:00", "y": 99873.61644742293}, {"x": "2026-01-08T17:56:00+00:00", "y": 99873.81579213399}, {"x": "2026-01-08T17:59:00+00:00", "y": 100099.46191956916}, {"x": "2026-01-08T18:16:00+00:00", "y": 101055.57232614957}, {"x": "2026-01-08T18:19:00+00:00", "y": 100458.97618552919}, {"x": "2026-01-08T18:36:00+00:00", "y": 99456.42830949278}, {"x": "2026-01-08T18:39:00+00:00", "y": 99827.13693213498}, {"x": "2026-01-08T18:56:00+00:00", "y": 100943.47657775499}, {"x": "2026-01-08T18:59:00+00:00", "y": 102297.93949562468}, {"x": "2026-01-08T19:16:00+00:00", "y": 103370.97866155428}, {"x": "2026-01-08T19:20:00+00:00", "y": 101368.18569467888}, {"x": "2026-01-08T19:36:00+00:00", "y": 101368.18569467888}, {"x": "2026-01-08T19:40:00+00:00", "y": 102335.8061849758}, {"x": "2026-01-08T19:56:00+00:00", "y": 102335.8061849758}, {"x": "2026-01-08T20:00:00+00:00", "y": 102658.75666052011}, {"x": "2026-01-08T20:16:00+00:00", "y": 100075.69083528496}, {"x": "2026-01-08T20:20:00+00:00", "y": 100075.69083528496}, {"x": "2026-01-08T20:36:00+00:00", "y": 100512.1706426622}, {"x": "2026-01-08T20:40:00+00:00", "y": 100512.1706426622}, {"x": "2026-01-08T20:56:00+00:00", "y": 100511.97474136528}, {"x": "2026-01-08T21:00:00+00:00", "y": 99203.13953934419}, {"x": "2026-01-09T13:10:00+00:00", "y": 99204.53612600933}, {"x": "2026-01-09T13:34:00+00:00", "y": 99869.85506434321}, {"x": "2026-01-09T14:24:00+00:00", "y": 102930.24386103824}, {"x": "2026-01-09T14:35:00+00:00", "y": 104086.36721460069}, {"x": "2026-01-09T14:48:00+00:00", "y": 107150.16150728124}, {"x": "2026-01-09T14:55:00+00:00", "y": 108306.21416547976}, {"x": "2026-01-09T15:08:00+00:00", "y": 108306.21416547976}, {"x": "2026-01-09T15:15:00+00:00", "y": 104471.52896689797}, {"x": "2026-01-09T15:28:00+00:00", "y": 94130.16945795623}, {"x": "2026-01-09T15:35:00+00:00", "y": 95658.67299115201}, {"x": "2026-01-09T15:48:00+00:00", "y": 102345.75939550996}, {"x": "2026-01-09T15:55:00+00:00", "y": 102611.99778300962}, {"x": "2026-01-09T16:08:00+00:00", "y": 97375.84718686255}, {"x": "2026-01-09T16:15:00+00:00", "y": 95987.55657853042}, {"x": "2026-01-09T16:28:00+00:00", "y": 99294.11065692501}, {"x": "2026-01-09T16:35:00+00:00", "y": 100987.10081493428}, {"x": "2026-01-09T16:48:00+00:00", "y": 99057.15378196386}, {"x": "2026-01-09T16:55:00+00:00", "y": 97677.23075625188}, {"x": "2026-01-09T17:08:00+00:00", "y": 98975.64527219928}, {"x": "2026-01-09T17:15:00+00:00", "y": 100143.19366689543}, {"x": "2026-01-09T17:28:00+00:00", "y": 100143.06937660322}, {"x": "2026-01-09T17:35:00+00:00", "y": 99739.00070515594}, {"x": "2026-01-09T17:48:00+00:00", "y": 99739.95359739616}, {"x": "2026-01-09T17:55:00+00:00", "y": 100013.58117294741}, {"x": "2026-01-09T18:08:00+00:00", "y": 101446.01046673533}, {"x": "2026-01-09T18:15:00+00:00", "y": 101690.90724994415}, {"x": "2026-01-09T18:28:00+00:00", "y": 100198.0341731625}, {"x": "2026-01-09T18:35:00+00:00", "y": 98308.89960931192}, {"x": "2026-01-09T18:48:00+00:00", "y": 98428.81922909235}, {"x": "2026-01-09T18:55:00+00:00", "y": 99870.06070438949}, {"x": "2026-01-09T19:08:00+00:00", "y": 99933.85248800775}, {"x": "2026-01-09T19:15:00+00:00", "y": 99660.20791781635}, {"x": "2026-01-09T19:28:00+00:00", "y": 99660.20791781635}, {"x": "2026-01-09T19:35:00+00:00", "y": 99890.6918095071}, {"x": "2026-01-09T19:48:00+00:00", "y": 99571.66545941775}, {"x": "2026-01-09T19:55:00+00:00", "y": 99571.735103108}, {"x": "2026-01-09T20:08:00+00:00", "y": 99763.08151865375}, {"x": "2026-01-09T20:15:00+00:00", "y": 100057.79777755373}, {"x": "2026-01-09T20:28:00+00:00", "y": 100057.83436342173}, {"x": "2026-01-09T20:35:00+00:00", "y": 100352.8047584664}, {"x": "2026-01-09T20:48:00+00:00", "y": 100376.46133865706}, {"x": "2026-01-09T20:55:00+00:00", "y": 100376.46133865706}, {"x": "2026-01-09T21:12:00+00:00", "y": 100400.37143668866}, {"x": "2026-01-09T21:23:00+00:00", "y": 100400.37143668866}, {"x": "2026-01-12T13:08:00+00:00", "y": 100400.37143668866}, {"x": "2026-01-12T13:57:00+00:00", "y": 100400.37143668866}, {"x": "2026-01-12T14:42:00+00:00", "y": 98526.68110853528}, {"x": "2026-01-12T14:44:00+00:00", "y": 96753.05763036339}, {"x": "2026-01-12T15:02:00+00:00", "y": 98882.60556275322}, {"x": "2026-01-12T15:04:00+00:00", "y": 100205.96144125267}, {"x": "2026-01-12T15:22:00+00:00", "y": 99374.46403892535}, {"x": "2026-01-12T15:24:00+00:00", "y": 98891.07935545362}, {"x": "2026-01-12T15:42:00+00:00", "y": 99640.6255725391}, {"x": "2026-01-12T15:44:00+00:00", "y": 99986.59125572194}, {"x": "2026-01-12T16:02:00+00:00", "y": 98787.42069626057}, {"x": "2026-01-12T16:04:00+00:00", "y": 98787.92477945548}, {"x": "2026-01-12T16:22:00+00:00", "y": 99763.94583090096}, {"x": "2026-01-12T16:24:00+00:00", "y": 99908.22998925709}, {"x": "2026-01-12T16:42:00+00:00", "y": 99908.18330849746}, {"x": "2026-01-12T16:44:00+00:00", "y": 100052.17593607484}, {"x": "2026-01-12T17:02:00+00:00", "y": 100054.46329329658}, {"x": "2026-01-12T17:04:00+00:00", "y": 100054.46329329656}, {"x": "2026-01-12T17:22:00+00:00", "y": 100054.33881127089}, {"x": "2026-01-12T17:24:00+00:00", "y": 100054.33881127089}, {"x": "2026-01-12T17:42:00+00:00", "y": 100053.65416012969}, {"x": "2026-01-12T17:44:00+00:00", "y": 99635.91520348702}, {"x": "2026-01-12T18:02:00+00:00", "y": 99637.47122880793}, {"x": "2026-01-12T18:04:00+00:00", "y": 99767.23527214349}, {"x": "2026-01-12T18:23:00+00:00", "y": 99768.60457442589}, {"x": "2026-01-12T18:24:00+00:00", "y": 99768.66989293604}, {"x": "2026-01-12T18:44:00+00:00", "y": 99783.14032856369}, {"x": "2026-01-12T18:44:00+00:00", "y": 99783.13659607738}, {"x": "2026-01-12T19:04:00+00:00", "y": 99984.42254888776}, {"x": "2026-01-12T19:05:00+00:00", "y": 100000.34738366761}, {"x": "2026-01-12T19:24:00+00:00", "y": 99611.62599128897}, {"x": "2026-01-12T19:26:00+00:00", "y": 98958.57335064243}, {"x": "2026-01-12T19:44:00+00:00", "y": 99152.7741502937}, {"x": "2026-01-12T19:46:00+00:00", "y": 100044.34437759158}, {"x": "2026-01-12T20:04:00+00:00", "y": 100051.53169341675}, {"x": "2026-01-12T20:06:00+00:00", "y": 100321.9309299367}, {"x": "2026-01-12T20:24:00+00:00", "y": 100321.93092993669}, {"x": "2026-01-12T20:26:00+00:00", "y": 100321.93092993669}, {"x": "2026-01-12T20:44:00+00:00", "y": 100321.9309299367}, {"x": "2026-01-12T20:46:00+00:00", "y": 100321.93092993669}, {"x": "2026-01-12T21:04:00+00:00", "y": 100321.9309299367}, {"x": "2026-01-12T21:10:00+00:00", "y": 100321.9309299367}, {"x": "2026-01-13T13:32:00+00:00", "y": 96208.44366633598}, {"x": "2026-01-13T13:37:00+00:00", "y": 94611.38917614322}, {"x": "2026-01-13T14:31:00+00:00", "y": 98835.31078525852}, {"x": "2026-01-13T14:42:00+00:00", "y": 100415.89491941057}, {"x": "2026-01-13T14:51:00+00:00", "y": 101092.72195427085}, {"x": "2026-01-13T15:02:00+00:00", "y": 102908.96018885467}, {"x": "2026-01-13T15:11:00+00:00", "y": 102908.96018885466}, {"x": "2026-01-13T15:22:00+00:00", "y": 104737.03480884545}, {"x": "2026-01-13T15:31:00+00:00", "y": 104737.03480884546}, {"x": "2026-01-13T15:42:00+00:00", "y": 100835.44368802758}, {"x": "2026-01-13T15:51:00+00:00", "y": 98702.07609776303}, {"x": "2026-01-13T16:02:00+00:00", "y": 98947.69373085267}, {"x": "2026-01-13T16:11:00+00:00", "y": 99735.53318167497}, {"x": "2026-01-13T16:22:00+00:00", "y": 99894.00508159843}, {"x": "2026-01-13T16:31:00+00:00", "y": 99895.00970054428}, {"x": "2026-01-13T16:42:00+00:00", "y": 98755.98654684296}, {"x": "2026-01-13T16:51:00+00:00", "y": 98761.36125820331}, {"x": "2026-01-13T17:02:00+00:00", "y": 99856.59793818354}, {"x": "2026-01-13T17:11:00+00:00", "y": 100269.03116835798}, {"x": "2026-01-13T17:22:00+00:00", "y": 100384.13742582178}, {"x": "2026-01-13T17:31:00+00:00", "y": 100797.70893392595}, {"x": "2026-01-13T17:42:00+00:00", "y": 100797.70893392595}, {"x": "2026-01-13T17:51:00+00:00", "y": 100797.70893392594}, {"x": "2026-01-13T18:02:00+00:00", "y": 100797.70893392594}, {"x": "2026-01-13T18:11:00+00:00", "y": 99750.36555288256}, {"x": "2026-01-13T18:22:00+00:00", "y": 99750.36555288255}, {"x": "2026-01-13T18:31:00+00:00", "y": 99974.40325729753}, {"x": "2026-01-13T18:42:00+00:00", "y": 99974.40325729754}, {"x": "2026-01-13T18:51:00+00:00", "y": 101428.08002417478}, {"x": "2026-01-13T19:02:00+00:00", "y": 101111.88905594914}, {"x": "2026-01-13T19:11:00+00:00", "y": 102566.44613532639}, {"x": "2026-01-13T19:22:00+00:00", "y": 102653.08118921782}, {"x": "2026-01-13T19:32:00+00:00", "y": 102653.08118921782}, {"x": "2026-01-13T19:42:00+00:00", "y": 102653.1412048537}, {"x": "2026-01-13T19:52:00+00:00", "y": 102653.14120485372}, {"x": "2026-01-13T20:02:00+00:00", "y": 103085.90872817828}, {"x": "2026-01-13T20:12:00+00:00", "y": 103085.90872817828}, {"x": "2026-01-13T20:22:00+00:00", "y": 103518.89038418875}, {"x": "2026-01-13T20:32:00+00:00", "y": 103518.89038418877}, {"x": "2026-01-13T20:42:00+00:00", "y": 102060.3921407056}, {"x": "2026-01-13T20:52:00+00:00", "y": 98066.59060306242}, {"x": "2026-01-13T21:02:00+00:00", "y": 98662.10107458167}, {"x": "2026-01-13T21:25:00+00:00", "y": 100287.18827133547}, {"x": "2026-01-14T13:36:00+00:00", "y": 104029.69822598711}, {"x": "2026-01-14T14:00:00+00:00", "y": 104572.3784277363}, {"x": "2026-01-14T14:41:00+00:00", "y": 104572.3784277363}, {"x": "2026-01-14T14:41:00+00:00", "y": 108320.2342217771}, {"x": "2026-01-14T15:01:00+00:00", "y": 108320.2342217771}, {"x": "2026-01-14T15:01:00+00:00", "y": 108320.23422177711}, {"x": "2026-01-14T15:21:00+00:00", "y": 105031.42841189035}, {"x": "2026-01-14T15:21:00+00:00", "y": 96295.59038051621}, {"x": "2026-01-14T15:41:00+00:00", "y": 98497.08416012823}, {"x": "2026-01-14T15:41:00+00:00", "y": 99738.89819786447}, {"x": "2026-01-14T16:01:00+00:00", "y": 99721.07080636526}, {"x": "2026-01-14T16:01:00+00:00", "y": 99715.70337855711}, {"x": "2026-01-14T16:21:00+00:00", "y": 99720.87332209188}, {"x": "2026-01-14T16:21:00+00:00", "y": 99724.19859723227}, {"x": "2026-01-14T16:41:00+00:00", "y": 101598.02578005483}, {"x": "2026-01-14T16:41:00+00:00", "y": 103410.16819444887}, {"x": "2026-01-14T17:01:00+00:00", "y": 100606.2081243837}, {"x": "2026-01-14T17:01:00+00:00", "y": 98171.37240447161}, {"x": "2026-01-14T17:21:00+00:00", "y": 101099.2602488306}, {"x": "2026-01-14T17:21:00+00:00", "y": 103034.3457794743}, {"x": "2026-01-14T17:41:00+00:00", "y": 105029.70616102622}, {"x": "2026-01-14T17:41:00+00:00", "y": 103630.40006839327}, {"x": "2026-01-14T18:01:00+00:00", "y": 99279.10456432296}, {"x": "2026-01-14T18:01:00+00:00", "y": 99366.46170210693}, {"x": "2026-01-14T18:21:00+00:00", "y": 99366.62583140109}, {"x": "2026-01-14T18:22:00+00:00", "y": 99724.94796731003}, {"x": "2026-01-14T18:41:00+00:00", "y": 100568.57572555667}, {"x": "2026-01-14T18:42:00+00:00", "y": 100632.441324739}, {"x": "2026-01-14T19:01:00+00:00", "y": 99260.98970376357}, {"x": "2026-01-14T19:02:00+00:00", "y": 99325.99336021936}, {"x": "2026-01-14T19:21:00+00:00", "y": 99849.21208774722}, {"x": "2026-01-14T19:22:00+00:00", "y": 99280.86881262428}, {"x": "2026-01-14T19:41:00+00:00", "y": 99281.28718034281}, {"x": "2026-01-14T19:42:00+00:00", "y": 99719.37991319947}, {"x": "2026-01-14T20:01:00+00:00", "y": 101068.68965167792}, {"x": "2026-01-14T20:02:00+00:00", "y": 101068.71805033668}, {"x": "2026-01-14T20:21:00+00:00", "y": 102419.51981654641}, {"x": "2026-01-14T20:22:00+00:00", "y": 102541.63064859086}, {"x": "2026-01-14T20:41:00+00:00", "y": 99118.71324746343}, {"x": "2026-01-14T20:42:00+00:00", "y": 98293.50410583464}, {"x": "2026-01-14T21:02:00+00:00", "y": 98997.87977366199}, {"x": "2026-01-14T21:36:00+00:00", "y": 99707.59431103132}, {"x": "2026-01-15T13:26:00+00:00", "y": 99719.69624373574}, {"x": "2026-01-15T14:17:00+00:00", "y": 100327.77807389708}, {"x": "2026-01-15T14:32:00+00:00", "y": 100337.70510914341}, {"x": "2026-01-15T14:44:00+00:00", "y": 98138.84576686923}, {"x": "2026-01-15T14:52:00+00:00", "y": 98719.8819224725}, {"x": "2026-01-15T15:04:00+00:00", "y": 101141.1791229074}, {"x": "2026-01-15T15:12:00+00:00", "y": 100462.30503301146}, {"x": "2026-01-15T15:24:00+00:00", "y": 98405.2774607202}, {"x": "2026-01-15T15:32:00+00:00", "y": 98499.06910854504}, {"x": "2026-01-15T15:44:00+00:00", "y": 101704.78005996597}, {"x": "2026-01-15T15:52:00+00:00", "y": 103655.20593483128}, {"x": "2026-01-15T16:04:00+00:00", "y": 98621.84662343987}, {"x": "2026-01-15T16:12:00+00:00", "y": 100572.83435597463}, {"x": "2026-01-15T16:24:00+00:00", "y": 103603.34979894033}, {"x": "2026-01-15T16:32:00+00:00", "y": 99646.49634503125}, {"x": "2026-01-15T16:44:00+00:00", "y": 99644.6593267682}, {"x": "2026-01-15T16:52:00+00:00", "y": 99687.85662545776}, {"x": "2026-01-15T17:04:00+00:00", "y": 99692.15911560017}, {"x": "2026-01-15T17:12:00+00:00", "y": 99771.22942379571}, {"x": "2026-01-15T17:24:00+00:00", "y": 100050.00144411332}, {"x": "2026-01-15T17:32:00+00:00", "y": 100129.1000081149}, {"x": "2026-01-15T17:44:00+00:00", "y": 99218.09463620526}, {"x": "2026-01-15T17:52:00+00:00", "y": 98980.80857117624}, {"x": "2026-01-15T18:04:00+00:00", "y": 99604.20161265232}, {"x": "2026-01-15T18:12:00+00:00", "y": 99683.36432920634}, {"x": "2026-01-15T18:24:00+00:00", "y": 99684.1917837979}, {"x": "2026-01-15T18:32:00+00:00", "y": 99684.28982669568}, {"x": "2026-01-15T18:44:00+00:00", "y": 100019.40162792442}, {"x": "2026-01-15T18:52:00+00:00", "y": 100321.44658247306}, {"x": "2026-01-15T19:05:00+00:00", "y": 100656.8241217602}, {"x": "2026-01-15T19:12:00+00:00", "y": 100958.96283220347}, {"x": "2026-01-15T19:25:00+00:00", "y": 100958.96283220347}, {"x": "2026-01-15T19:32:00+00:00", "y": 100958.96283220347}, {"x": "2026-01-15T19:45:00+00:00", "y": 99246.86844130637}, {"x": "2026-01-15T19:52:00+00:00", "y": 99246.86844130637}, {"x": "2026-01-15T20:05:00+00:00", "y": 100288.46567596513}, {"x": "2026-01-15T20:12:00+00:00", "y": 100288.46567596513}, {"x": "2026-01-15T20:25:00+00:00", "y": 102170.35512945129}, {"x": "2026-01-15T20:32:00+00:00", "y": 101517.84241634599}, {"x": "2026-01-15T20:45:00+00:00", "y": 99480.99714937064}, {"x": "2026-01-15T20:52:00+00:00", "y": 100015.57559576612}, {"x": "2026-01-15T21:05:00+00:00", "y": 100160.33967906109}, {"x": "2026-01-15T21:42:00+00:00", "y": 100160.22321923761}, {"x": "2026-01-16T14:37:00+00:00", "y": 97093.08000737787}, {"x": "2026-01-16T14:38:00+00:00", "y": 97095.01324044744}, {"x": "2026-01-16T14:57:00+00:00", "y": 101320.29206557803}, {"x": "2026-01-16T14:58:00+00:00", "y": 104552.22888030519}, {"x": "2026-01-16T15:17:00+00:00", "y": 106210.36455905937}, {"x": "2026-01-16T15:18:00+00:00", "y": 109444.02019074258}, {"x": "2026-01-16T15:37:00+00:00", "y": 109444.02019074258}, {"x": "2026-01-16T15:38:00+00:00", "y": 109444.02019074258}, {"x": "2026-01-16T15:57:00+00:00", "y": 104529.92920680068}, {"x": "2026-01-16T15:58:00+00:00", "y": 96272.50637146353}, {"x": "2026-01-16T16:17:00+00:00", "y": 97875.74483090501}, {"x": "2026-01-16T16:18:00+00:00", "y": 99686.11067972926}, {"x": "2026-01-16T16:37:00+00:00", "y": 99688.9559982213}, {"x": "2026-01-16T16:38:00+00:00", "y": 99694.13852133552}, {"x": "2026-01-16T16:57:00+00:00", "y": 100549.5238951999}, {"x": "2026-01-16T16:58:00+00:00", "y": 101269.41138484143}, {"x": "2026-01-16T17:17:00+00:00", "y": 102127.8114425492}, {"x": "2026-01-16T17:18:00+00:00", "y": 101106.71505888087}, {"x": "2026-01-16T17:37:00+00:00", "y": 99287.72821015275}, {"x": "2026-01-16T17:38:00+00:00", "y": 99713.70504345631}, {"x": "2026-01-16T17:57:00+00:00", "y": 100168.30656679987}, {"x": "2026-01-16T17:58:00+00:00", "y": 100297.01808406723}, {"x": "2026-01-16T18:17:00+00:00", "y": 99205.66414999458}, {"x": "2026-01-16T18:18:00+00:00", "y": 98183.43356270007}, {"x": "2026-01-16T18:37:00+00:00", "y": 98920.1855367624}, {"x": "2026-01-16T18:38:00+00:00", "y": 99836.97187641595}, {"x": "2026-01-16T18:57:00+00:00", "y": 100081.13833395427}, {"x": "2026-01-16T18:58:00+00:00", "y": 99807.58796470593}, {"x": "2026-01-16T19:17:00+00:00", "y": 100052.93361342885}, {"x": "2026-01-16T19:18:00+00:00", "y": 102526.83693215942}, {"x": "2026-01-16T19:37:00+00:00", "y": 101313.5441643218}, {"x": "2026-01-16T19:38:00+00:00", "y": 98099.62034271332}];
+
+        const ctx = document.getElementById('equityChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: equityData.map(d => d.x),
+                datasets: [{
+                    label: 'Equity',
+                    data: equityData.map(d => d.y),
+                    borderColor: '#0f3460',
+                    backgroundColor: 'rgba(15, 52, 96, 0.1)',
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        ticks: {
+                            maxTicksLimit: 10,
+                            color: '#aaa'
+                        },
+                        grid: {
+                            color: '#2a2a4e'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        ticks: {
+                            color: '#aaa'
+                        },
+                        grid: {
+                            color: '#2a2a4e'
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

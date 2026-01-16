@@ -1063,7 +1063,7 @@ class WalkForwardOptimizer:
                         TextColumn("[progress.description]{task.description}"),
                         BarColumn(),
                         TaskProgressColumn(),
-                        TextColumn("[cyan]Completed: {task.fields[completed]}/{task.fields[total]}[/cyan]"),
+                        TextColumn("[cyan]Done: {task.fields[done_count]}/{task.fields[total_count]}[/cyan]"),
                         TextColumn("[green]OK: {task.fields[ok]}[/green]"),
                         TextColumn("[red]Err: {task.fields[err]}[/red]"),
                         TextColumn("[yellow]Mem: {task.fields[mem]:.0f}MB[/yellow]"),
@@ -1076,7 +1076,8 @@ class WalkForwardOptimizer:
                         task = progress.add_task(
                             "Parallel Walk-Forward",
                             total=n_splits,
-                            completed=0,
+                            done_count=0,
+                            total_count=n_splits,
                             ok=0,
                             err=0,
                             mem=0.0,
@@ -1116,7 +1117,7 @@ class WalkForwardOptimizer:
                                     progress.update(
                                         task,
                                         advance=1,
-                                        completed=completed_count,
+                                        done_count=completed_count,
                                         ok=completed_count - len(errors),
                                         err=len(errors),
                                         mem=peak_memory_mb,
@@ -1136,7 +1137,7 @@ class WalkForwardOptimizer:
                                     progress.update(
                                         task,
                                         advance=1,
-                                        completed=completed_count,
+                                        done_count=completed_count,
                                         ok=completed_count - len(errors),
                                         err=len(errors),
                                         mem=peak_memory_mb,
@@ -1378,7 +1379,7 @@ class WalkForwardOptimizer:
                         TextColumn("[progress.description]{task.description}"),
                         BarColumn(),
                         TaskProgressColumn(),
-                        TextColumn("[cyan]Done: {task.fields[completed]}/{task.fields[total]}[/cyan]"),
+                        TextColumn("[cyan]Done: {task.fields[done_count]}/{task.fields[total_count]}[/cyan]"),
                         TextColumn("[yellow]Mem: {task.fields[mem]:.0f}MB[/yellow]"),
                         TimeElapsedColumn(),
                         TimeRemainingColumn(),
@@ -1389,7 +1390,8 @@ class WalkForwardOptimizer:
                         task = progress.add_task(
                             "Parallel Lazy Walk-Forward",
                             total=n_splits,
-                            completed=0,
+                            done_count=0,
+                            total_count=n_splits,
                             mem=0.0,
                         )
 
@@ -1423,7 +1425,7 @@ class WalkForwardOptimizer:
                                 progress.update(
                                     task,
                                     advance=1,
-                                    completed=completed_count,
+                                    done_count=completed_count,
                                     mem=peak_memory_mb,
                                 )
 

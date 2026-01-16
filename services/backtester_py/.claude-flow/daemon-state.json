@@ -1,51 +1,51 @@
 {
   "running": true,
-  "startedAt": "2026-01-16T19:37:08.847Z",
+  "startedAt": "2026-01-16T21:22:38.955Z",
   "workers": {
     "map": {
-      "runCount": 118,
-      "successCount": 118,
+      "runCount": 10,
+      "successCount": 10,
       "failureCount": 0,
-      "averageDurationMs": 0.5338983050847462,
-      "lastRun": "2026-01-16T23:37:09.820Z",
-      "nextRun": "2026-01-16T23:52:09.820Z",
-      "isRunning": false
+      "averageDurationMs": 0.5,
+      "isRunning": false,
+      "nextRun": "2026-01-16T23:52:39.441Z",
+      "lastRun": "2026-01-16T23:37:39.441Z"
     },
     "audit": {
-      "runCount": 119,
+      "runCount": 10,
       "successCount": 0,
-      "failureCount": 119,
+      "failureCount": 10,
       "averageDurationMs": 0,
-      "lastRun": "2026-01-16T23:39:11.551Z",
-      "nextRun": "2026-01-16T23:49:11.551Z",
-      "isRunning": false
+      "isRunning": false,
+      "nextRun": "2026-01-16T23:39:40.409Z",
+      "lastRun": "2026-01-16T23:44:40.610Z"
     },
     "optimize": {
-      "runCount": 88,
+      "runCount": 7,
       "successCount": 0,
-      "failureCount": 88,
+      "failureCount": 7,
       "averageDurationMs": 0,
-      "lastRun": "2026-01-16T23:46:10.330Z",
-      "nextRun": "2026-01-16T23:41:10.228Z",
-      "isRunning": false
+      "isRunning": false,
+      "nextRun": "2026-01-16T23:46:39.932Z",
+      "lastRun": "2026-01-16T23:31:39.931Z"
     },
     "consolidate": {
-      "runCount": 59,
-      "successCount": 59,
+      "runCount": 5,
+      "successCount": 5,
       "failureCount": 0,
-      "averageDurationMs": 0.6440677966101697,
-      "lastRun": "2026-01-16T23:43:09.536Z",
-      "nextRun": "2026-01-17T00:13:09.536Z",
-      "isRunning": false
+      "averageDurationMs": 2.4,
+      "isRunning": false,
+      "nextRun": "2026-01-16T23:58:39.905Z",
+      "lastRun": "2026-01-16T23:29:40.409Z"
     },
     "testgaps": {
-      "runCount": 72,
+      "runCount": 6,
       "successCount": 0,
-      "failureCount": 72,
+      "failureCount": 6,
       "averageDurationMs": 0,
-      "lastRun": "2026-01-16T23:30:09.939Z",
-      "nextRun": "2026-01-16T23:50:09.940Z",
-      "isRunning": false
+      "isRunning": false,
+      "nextRun": "2026-01-16T23:55:39.492Z",
+      "lastRun": "2026-01-16T23:35:39.492Z"
     },
     "predict": {
       "runCount": 0,
@@ -64,8 +64,8 @@
   },
   "config": {
     "autoStart": false,
-    "logDir": "/home/bw/Projects/autoBot/.claude-flow/logs",
-    "stateFile": "/home/bw/Projects/autoBot/.claude-flow/daemon-state.json",
+    "logDir": "/home/bw/Projects/autoBot/services/backtester_py/.claude-flow/logs",
+    "stateFile": "/home/bw/Projects/autoBot/services/backtester_py/.claude-flow/daemon-state.json",
     "maxConcurrent": 2,
     "workerTimeoutMs": 300000,
     "resourceThresholds": {
@@ -131,5 +131,5 @@
       }
     ]
   },
-  "savedAt": "2026-01-16T23:46:10.330Z"
+  "savedAt": "2026-01-16T23:44:40.611Z"
 }

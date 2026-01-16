@@ -51,19 +51,17 @@ from feature_builder_py.decision_frame import DecisionFrameBuilder
 from feature_builder_py.micro_bars import MicrostructureBarBuilder
 
 # Configure structlog for rich console output
+# Note: Using native structlog processors (not stdlib) with PrintLoggerFactory
 structlog.configure(
     processors=[
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
         structlog.dev.ConsoleRenderer(colors=True),
     ],
-    wrapper_class=structlog.stdlib.BoundLogger,
+    wrapper_class=structlog.BoundLogger,
     context_class=dict,
     logger_factory=structlog.PrintLoggerFactory(),
     cache_logger_on_first_use=True,
@@ -176,6 +174,8 @@ class FeatureBuilderCLI:
 
         Uses lazy evaluation with scan_parquet() for memory efficiency.
         Supports memory-mapped file access and predicate pushdown.
+        Supports both flat files (data/SPY_trades.parquet) and
+        Hive-partitioned directories (lake/raw/trades/dt=.../symbol=.../data.parquet).
 
         Args:
             symbol: Stock symbol to load.
@@ -184,54 +184,95 @@ class FeatureBuilderCLI:
         Returns:
             DataFrame or LazyFrame with trade data.
         """
+        # Check for flat file first
         trade_path = self.data_dir / f"{symbol}_trades.parquet"
 
+        # Check for Hive-partitioned lake directory
+        lake_path = self.data_dir / "raw" / "trades"
+        hive_pattern = self.data_dir / "raw" / "trades" / f"**/symbol={symbol}/**/*.parquet"
+
         if trade_path.exists():
+            # Flat file mode
             self._log.info(
                 "loading_trades",
                 symbol=symbol,
                 path=str(trade_path),
                 lazy=lazy,
+                mode="flat_file",
+            )
+            source = trade_path
+            hive_partitioning = False
+        elif lake_path.exists():
+            # Hive-partitioned lake directory mode
+            # Use glob pattern to find all partitions for this symbol
+            import glob
+            pattern = str(self.data_dir / "raw" / "trades" / "*" / f"symbol={symbol}" / "*.parquet")
+            matching_files = glob.glob(pattern)
+            if matching_files:
+                self._log.info(
+                    "loading_trades",
+                    symbol=symbol,
+                    path=str(lake_path),
+                    lazy=lazy,
+                    mode="hive_partitioned",
+                    files_found=len(matching_files),
+                )
+                source = matching_files
+                hive_partitioning = True
+            else:
+                self._log.warning(
+                    "no_trade_partitions_found",
+                    symbol=symbol,
+                    pattern=pattern,
+                )
+                return self._generate_sample_trades(symbol)
+        else:
+            self._log.warning(
+                "trade_file_not_found",
+                symbol=symbol,
+                flat_path=str(trade_path),
+                lake_path=str(lake_path),
+            )
+            return self._generate_sample_trades(symbol)
+
+        if lazy:
+            # Use scan_parquet for lazy evaluation
+            lf = pl.scan_parquet(
+                source,
+                low_memory=False,
+                hive_partitioning=hive_partitioning,
             )
 
-            if lazy:
-                # Use scan_parquet for lazy evaluation
-                lf = pl.scan_parquet(
-                    trade_path,
-                    memory_map=True,  # Memory-mapped for better I/O
-                    low_memory=False,
-                )
+            # Apply date filtering with predicate pushdown
+            if self.start_date:
+                start_dt = datetime.fromisoformat(f"{self.start_date}T00:00:00+00:00")
+                lf = lf.filter(pl.col("ts_event") >= start_dt)
+            if self.end_date:
+                end_dt = datetime.fromisoformat(f"{self.end_date}T23:59:59+00:00")
+                lf = lf.filter(pl.col("ts_event") <= end_dt)
 
-                # Apply date filtering with predicate pushdown
-                if self.start_date:
-                    start_dt = datetime.fromisoformat(f"{self.start_date}T00:00:00")
-                    lf = lf.filter(pl.col("ts_event") >= start_dt)
-                if self.end_date:
-                    end_dt = datetime.fromisoformat(f"{self.end_date}T23:59:59")
-                    lf = lf.filter(pl.col("ts_event") <= end_dt)
+            return lf
+        else:
+            # Collect with streaming for large files
+            lf = pl.scan_parquet(
+                source,
+                hive_partitioning=hive_partitioning,
+            )
 
-                return lf
-            else:
-                # Collect with streaming for large files
-                lf = pl.scan_parquet(trade_path, memory_map=True)
+            # Apply date filtering with predicate pushdown
+            if self.start_date:
+                start_dt = datetime.fromisoformat(f"{self.start_date}T00:00:00+00:00")
+                lf = lf.filter(pl.col("ts_event") >= start_dt)
+            if self.end_date:
+                end_dt = datetime.fromisoformat(f"{self.end_date}T23:59:59+00:00")
+                lf = lf.filter(pl.col("ts_event") <= end_dt)
 
-                # Apply date filtering with predicate pushdown
-                if self.start_date:
-                    start_dt = datetime.fromisoformat(f"{self.start_date}T00:00:00")
-                    lf = lf.filter(pl.col("ts_event") >= start_dt)
-                if self.end_date:
-                    end_dt = datetime.fromisoformat(f"{self.end_date}T23:59:59")
-                    lf = lf.filter(pl.col("ts_event") <= end_dt)
-
-                try:
-                    # Use streaming engine for large datasets
-                    return lf.collect(streaming=True)
-                except Exception:
-                    # Fallback to regular collection
-                    return lf.collect()
-
-        # Return sample data for demonstration
-        return self._generate_sample_trades(symbol)
+            try:
+                # Use streaming engine for large datasets
+                return lf.collect(engine="streaming")
+            except Exception:
+                # Fallback to regular collection
+                return lf.collect()
 
     def _load_quotes(
         self,
@@ -243,6 +284,8 @@ class FeatureBuilderCLI:
 
         Uses lazy evaluation with scan_parquet() for memory efficiency.
         Supports memory-mapped file access and predicate pushdown.
+        Supports both flat files (data/SPY_quotes.parquet) and
+        Hive-partitioned directories (lake/raw/quotes/dt=.../symbol=.../data.parquet).
 
         Args:
             symbol: Stock symbol to load.
@@ -251,52 +294,91 @@ class FeatureBuilderCLI:
         Returns:
             DataFrame or LazyFrame with quote data.
         """
+        # Check for flat file first
         quote_path = self.data_dir / f"{symbol}_quotes.parquet"
 
+        # Check for Hive-partitioned lake directory
+        lake_path = self.data_dir / "raw" / "quotes"
+
         if quote_path.exists():
+            # Flat file mode
             self._log.info(
                 "loading_quotes",
                 symbol=symbol,
                 path=str(quote_path),
                 lazy=lazy,
+                mode="flat_file",
+            )
+            source = quote_path
+            hive_partitioning = False
+        elif lake_path.exists():
+            # Hive-partitioned lake directory mode
+            import glob
+            pattern = str(self.data_dir / "raw" / "quotes" / "*" / f"symbol={symbol}" / "*.parquet")
+            matching_files = glob.glob(pattern)
+            if matching_files:
+                self._log.info(
+                    "loading_quotes",
+                    symbol=symbol,
+                    path=str(lake_path),
+                    lazy=lazy,
+                    mode="hive_partitioned",
+                    files_found=len(matching_files),
+                )
+                source = matching_files
+                hive_partitioning = True
+            else:
+                self._log.warning(
+                    "no_quote_partitions_found",
+                    symbol=symbol,
+                    pattern=pattern,
+                )
+                return self._generate_sample_quotes(symbol)
+        else:
+            self._log.warning(
+                "quote_file_not_found",
+                symbol=symbol,
+                flat_path=str(quote_path),
+                lake_path=str(lake_path),
+            )
+            return self._generate_sample_quotes(symbol)
+
+        if lazy:
+            # Use scan_parquet for lazy evaluation
+            lf = pl.scan_parquet(
+                source,
+                low_memory=False,
+                hive_partitioning=hive_partitioning,
             )
 
-            if lazy:
-                # Use scan_parquet for lazy evaluation
-                lf = pl.scan_parquet(
-                    quote_path,
-                    memory_map=True,
-                    low_memory=False,
-                )
+            # Apply date filtering with predicate pushdown
+            if self.start_date:
+                start_dt = datetime.fromisoformat(f"{self.start_date}T00:00:00+00:00")
+                lf = lf.filter(pl.col("ts_event") >= start_dt)
+            if self.end_date:
+                end_dt = datetime.fromisoformat(f"{self.end_date}T23:59:59+00:00")
+                lf = lf.filter(pl.col("ts_event") <= end_dt)
 
-                # Apply date filtering with predicate pushdown
-                if self.start_date:
-                    start_dt = datetime.fromisoformat(f"{self.start_date}T00:00:00")
-                    lf = lf.filter(pl.col("ts_event") >= start_dt)
-                if self.end_date:
-                    end_dt = datetime.fromisoformat(f"{self.end_date}T23:59:59")
-                    lf = lf.filter(pl.col("ts_event") <= end_dt)
+            return lf
+        else:
+            # Collect with streaming for large files
+            lf = pl.scan_parquet(
+                source,
+                hive_partitioning=hive_partitioning,
+            )
 
-                return lf
-            else:
-                # Collect with streaming for large files
-                lf = pl.scan_parquet(quote_path, memory_map=True)
+            # Apply date filtering with predicate pushdown
+            if self.start_date:
+                start_dt = datetime.fromisoformat(f"{self.start_date}T00:00:00+00:00")
+                lf = lf.filter(pl.col("ts_event") >= start_dt)
+            if self.end_date:
+                end_dt = datetime.fromisoformat(f"{self.end_date}T23:59:59+00:00")
+                lf = lf.filter(pl.col("ts_event") <= end_dt)
 
-                # Apply date filtering with predicate pushdown
-                if self.start_date:
-                    start_dt = datetime.fromisoformat(f"{self.start_date}T00:00:00")
-                    lf = lf.filter(pl.col("ts_event") >= start_dt)
-                if self.end_date:
-                    end_dt = datetime.fromisoformat(f"{self.end_date}T23:59:59")
-                    lf = lf.filter(pl.col("ts_event") <= end_dt)
-
-                try:
-                    return lf.collect(streaming=True)
-                except Exception:
-                    return lf.collect()
-
-        # Return sample data for demonstration
-        return self._generate_sample_quotes(symbol)
+            try:
+                return lf.collect(engine="streaming")
+            except Exception:
+                return lf.collect()
 
     def _generate_sample_trades(self, symbol: str, n_rows: int = 10000) -> pl.DataFrame:
         """Generate sample trade data for demonstration."""
@@ -634,6 +716,56 @@ class LargeDatasetBuilder:
         self.micro_builder = MicrostructureBarBuilder(granularity="30s")
         self.decision_builder = DecisionFrameBuilder()
 
+    def _resolve_data_source(
+        self,
+        symbol: str,
+        data_type: str,  # "trades" or "quotes"
+    ) -> tuple[list[Path] | Path | None, bool]:
+        """
+        Resolve data source for a symbol, supporting both flat files and Hive partitioning.
+
+        Args:
+            symbol: Stock symbol to load.
+            data_type: Type of data ("trades" or "quotes").
+
+        Returns:
+            Tuple of (source path(s), is_hive_partitioned).
+            Returns (None, False) if no data found.
+        """
+        import glob
+
+        # Check for flat file first
+        flat_path = self.data_dir / f"{symbol}_{data_type}.parquet"
+        if flat_path.exists():
+            self._log.info(
+                f"found_{data_type}_flat_file",
+                symbol=symbol,
+                path=str(flat_path),
+            )
+            return flat_path, False
+
+        # Check for Hive-partitioned lake directory
+        lake_path = self.data_dir / "raw" / data_type
+        if lake_path.exists():
+            pattern = str(self.data_dir / "raw" / data_type / "*" / f"symbol={symbol}" / "*.parquet")
+            matching_files = glob.glob(pattern)
+            if matching_files:
+                self._log.info(
+                    f"found_{data_type}_hive_partitions",
+                    symbol=symbol,
+                    path=str(lake_path),
+                    files_found=len(matching_files),
+                )
+                return [Path(f) for f in matching_files], True
+
+        self._log.warning(
+            f"{data_type}_not_found",
+            symbol=symbol,
+            flat_path=str(flat_path),
+            lake_path=str(lake_path) if lake_path.exists() else "N/A",
+        )
+        return None, False
+
     def process_symbol_lazy(
         self,
         symbol: str,
@@ -664,22 +796,28 @@ class LargeDatasetBuilder:
         )
 
         results = {}
-        trade_path = self.data_dir / f"{symbol}_trades.parquet"
-        quote_path = self.data_dir / f"{symbol}_quotes.parquet"
+        trades = None
 
-        # Check file sizes to determine processing strategy
-        if trade_path.exists():
-            trade_stats = estimate_memory_usage(trade_path)
-            self._log.info(
-                "trade_file_stats",
-                symbol=symbol,
-                rows=trade_stats["row_count"],
-                file_mb=round(trade_stats["file_size_mb"], 2),
-                estimated_memory_mb=round(trade_stats["estimated_memory_mb"], 2),
+        # Resolve trade data source (flat file or Hive partitioned)
+        trade_source, trade_hive = self._resolve_data_source(symbol, "trades")
+
+        if trade_source is not None:
+            # Log file stats for flat files only (estimate_memory_usage expects single file)
+            if not trade_hive and isinstance(trade_source, Path):
+                trade_stats = estimate_memory_usage(trade_source)
+                self._log.info(
+                    "trade_file_stats",
+                    symbol=symbol,
+                    rows=trade_stats["row_count"],
+                    file_mb=round(trade_stats["file_size_mb"], 2),
+                    estimated_memory_mb=round(trade_stats["estimated_memory_mb"], 2),
+                )
+
+            # Use lazy scanning with Hive partitioning support
+            trades_lf = pl.scan_parquet(
+                trade_source,
+                hive_partitioning=trade_hive,
             )
-
-            # Use lazy scanning
-            trades_lf = self.loader.scan_trades(trade_path)
 
             # Apply date filters
             if start_date:
@@ -692,7 +830,7 @@ class LargeDatasetBuilder:
                 progress_callback(f"{symbol}_trades", 0, 1)
 
             try:
-                trades = trades_lf.collect(streaming=True)
+                trades = trades_lf.collect(engine="streaming")
             except Exception:
                 trades = trades_lf.collect()
 
@@ -724,9 +862,14 @@ class LargeDatasetBuilder:
                     output_rows=len(bars),
                 )
 
-        # Process quotes
-        if quote_path.exists():
-            quotes_lf = self.loader.scan_quotes(quote_path)
+        # Resolve quote data source (flat file or Hive partitioned)
+        quote_source, quote_hive = self._resolve_data_source(symbol, "quotes")
+
+        if quote_source is not None:
+            quotes_lf = pl.scan_parquet(
+                quote_source,
+                hive_partitioning=quote_hive,
+            )
 
             if start_date:
                 quotes_lf = quotes_lf.filter(pl.col("ts_event") >= start_date)
@@ -737,15 +880,15 @@ class LargeDatasetBuilder:
                 progress_callback(f"{symbol}_quotes", 0, 1)
 
             try:
-                quotes = quotes_lf.collect(streaming=True)
+                quotes = quotes_lf.collect(engine="streaming")
             except Exception:
                 quotes = quotes_lf.collect()
 
             if progress_callback:
                 progress_callback(f"{symbol}_quotes", 1, 1)
 
-            # Build micro bars
-            if trade_path.exists():
+            # Build micro bars (requires both trades and quotes)
+            if trades is not None:
                 self._log.info(
                     "building_micro_bars",
                     symbol=symbol,
@@ -780,6 +923,7 @@ class LargeDatasetBuilder:
 
         Splits the data into batches, processes each batch separately,
         and writes results incrementally to avoid memory issues.
+        Supports both flat files and Hive-partitioned directories.
 
         Args:
             symbol: Stock symbol to process.
@@ -794,51 +938,102 @@ class LargeDatasetBuilder:
             batch_size=self.batch_size,
         )
 
-        trade_path = self.data_dir / f"{symbol}_trades.parquet"
         output_paths = {}
 
-        if not trade_path.exists():
-            self._log.warning("trade_file_not_found", path=str(trade_path))
+        # Resolve trade data source
+        trade_source, trade_hive = self._resolve_data_source(symbol, "trades")
+
+        if trade_source is None:
+            self._log.warning("trade_data_not_found", symbol=symbol)
             return output_paths
 
-        batch_processor = BatchProcessor(
-            batch_size=self.batch_size,
-            progress_callback=lambda curr, total, desc: (
-                progress_callback(f"{symbol}_{desc}", curr, total)
-                if progress_callback
-                else None
-            ),
-        )
-
-        # Process each timeframe
-        for timeframe, builder in self.bar_builders.items():
-            output_path = self.output_dir / f"{symbol}_bars_{timeframe}.parquet"
-
+        # For Hive-partitioned data, first create a combined lazy frame
+        # then materialize in batches
+        if trade_hive:
             self._log.info(
-                "batch_processing_bars",
+                "processing_hive_partitioned_data",
                 symbol=symbol,
-                timeframe=timeframe,
-                output_path=str(output_path),
+                files=len(trade_source) if isinstance(trade_source, list) else 1,
             )
 
-            def process_batch(batch: pl.DataFrame) -> pl.DataFrame:
-                return builder.build(batch, symbol)
-
-            batch_processor.process_batches(
-                trade_path,
-                process_fn=process_batch,
-                output_path=output_path,
-                sort_by="ts_event",
+            # Read all partitions using Polars lazy frame
+            trades_lf = pl.scan_parquet(
+                trade_source,
+                hive_partitioning=True,
             )
 
-            output_paths[f"bars_{timeframe}"] = output_path
+            # Build bars directly from lazy frame (collect with streaming)
+            for timeframe, builder in self.bar_builders.items():
+                output_path = self.output_dir / f"{symbol}_bars_{timeframe}.parquet"
 
-            self._log.info(
-                "batch_processing_completed",
-                symbol=symbol,
-                timeframe=timeframe,
-                output_path=str(output_path),
+                self._log.info(
+                    "building_bars_from_hive",
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    output_path=str(output_path),
+                )
+
+                if progress_callback:
+                    progress_callback(f"{symbol}_{timeframe}", 0, 1)
+
+                try:
+                    trades = trades_lf.collect(engine="streaming")
+                except Exception:
+                    trades = trades_lf.collect()
+
+                bars = builder.build(trades, symbol)
+                bars.write_parquet(output_path)
+                output_paths[f"bars_{timeframe}"] = output_path
+
+                if progress_callback:
+                    progress_callback(f"{symbol}_{timeframe}", 1, 1)
+
+                self._log.info(
+                    "bars_built_from_hive",
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    output_rows=len(bars),
+                )
+        else:
+            # Use batch processing for flat files
+            batch_processor = BatchProcessor(
+                batch_size=self.batch_size,
+                progress_callback=lambda curr, total, desc: (
+                    progress_callback(f"{symbol}_{desc}", curr, total)
+                    if progress_callback
+                    else None
+                ),
             )
+
+            # Process each timeframe
+            for timeframe, builder in self.bar_builders.items():
+                output_path = self.output_dir / f"{symbol}_bars_{timeframe}.parquet"
+
+                self._log.info(
+                    "batch_processing_bars",
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    output_path=str(output_path),
+                )
+
+                def process_batch(batch: pl.DataFrame) -> pl.DataFrame:
+                    return builder.build(batch, symbol)
+
+                batch_processor.process_batches(
+                    trade_source,
+                    process_fn=process_batch,
+                    output_path=output_path,
+                    sort_by="ts_event",
+                )
+
+                output_paths[f"bars_{timeframe}"] = output_path
+
+                self._log.info(
+                    "batch_processing_completed",
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    output_path=str(output_path),
+                )
 
         return output_paths
 

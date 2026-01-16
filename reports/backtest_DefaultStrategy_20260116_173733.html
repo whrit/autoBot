@@ -1,0 +1,1364 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backtest Report - DefaultStrategy</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --text-primary: #eee;
+            --text-secondary: #aaa;
+            --accent: #0f3460;
+            --profit: #00d26a;
+            --loss: #ff5252;
+            --border: #2a2a4e;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding: 2rem;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .metric-card {
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .metric-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-value.profit {
+            color: var(--profit);
+        }
+
+        .metric-value.loss {
+            color: var(--loss);
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .chart-container {
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+        }
+
+        .chart-container h2 {
+            margin-bottom: 1rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--accent);
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .buy { color: var(--profit); }
+        .sell { color: var(--loss); }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Backtest Report</h1>
+            <p class="subtitle">Strategy: DefaultStrategy</p>
+            <p class="subtitle">Generated: 2026-01-16 17:37:33</p>
+        </header>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-value loss">
+                    -1.86%
+                </div>
+                <div class="metric-label">Total Return</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">
+                    0.05
+                </div>
+                <div class="metric-label">Sharpe Ratio</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value loss">
+                    9.4%
+                </div>
+                <div class="metric-label">Max Drawdown</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">
+                    99.0%
+                </div>
+                <div class="metric-label">Win Rate</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">
+                    399
+                </div>
+                <div class="metric-label">Total Trades</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">
+                    0.00
+                </div>
+                <div class="metric-label">Profit Factor</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <h2>Equity Curve</h2>
+            <canvas id="equityChart" height="300"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <h2>Recent Trades</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Symbol</th>
+                        <th>Side</th>
+                        <th>Quantity</th>
+                        <th>Price</th>
+                        <th>Notional</th>
+                        <th>Slippage (bps)</th>
+                        <th>Commission</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td>2026-01-09T17:55:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.04</td>
+                        <td>$693.90</td>
+                        <td>$29</td>
+                        <td>1.0</td>
+                        <td>$0.00</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-09T17:55:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.35</td>
+                        <td>$693.96</td>
+                        <td>$245</td>
+                        <td>0.1</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-09T18:35:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.35</td>
+                        <td>$694.56</td>
+                        <td>$245</td>
+                        <td>1.0</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-09T18:35:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>2.01</td>
+                        <td>$694.51</td>
+                        <td>$1,399</td>
+                        <td>0.3</td>
+                        <td>$0.14</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-09T18:55:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>2.01</td>
+                        <td>$694.42</td>
+                        <td>$1,399</td>
+                        <td>1.0</td>
+                        <td>$0.14</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-09T18:55:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.06</td>
+                        <td>$694.48</td>
+                        <td>$43</td>
+                        <td>0.1</td>
+                        <td>$0.00</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-09T19:15:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.06</td>
+                        <td>$694.75</td>
+                        <td>$43</td>
+                        <td>1.0</td>
+                        <td>$0.00</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-09T19:15:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.33</td>
+                        <td>$694.69</td>
+                        <td>$230</td>
+                        <td>0.1</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-09T20:15:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.33</td>
+                        <td>$694.68</td>
+                        <td>$230</td>
+                        <td>1.0</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-09T20:15:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.42</td>
+                        <td>$694.74</td>
+                        <td>$295</td>
+                        <td>0.1</td>
+                        <td>$0.03</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T14:44:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.42</td>
+                        <td>$692.83</td>
+                        <td>$295</td>
+                        <td>1.0</td>
+                        <td>$0.03</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T14:44:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.71</td>
+                        <td>$692.79</td>
+                        <td>$1,185</td>
+                        <td>0.3</td>
+                        <td>$0.12</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T15:04:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>1.71</td>
+                        <td>$693.22</td>
+                        <td>$1,185</td>
+                        <td>1.0</td>
+                        <td>$0.12</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T15:04:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.20</td>
+                        <td>$693.26</td>
+                        <td>$137</td>
+                        <td>0.4</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T15:24:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.20</td>
+                        <td>$693.64</td>
+                        <td>$137</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T15:24:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.50</td>
+                        <td>$693.60</td>
+                        <td>$346</td>
+                        <td>0.4</td>
+                        <td>$0.03</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T16:24:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.50</td>
+                        <td>$694.28</td>
+                        <td>$346</td>
+                        <td>1.0</td>
+                        <td>$0.03</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T16:24:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.21</td>
+                        <td>$694.33</td>
+                        <td>$144</td>
+                        <td>0.2</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T17:44:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.21</td>
+                        <td>$694.57</td>
+                        <td>$144</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T17:44:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.19</td>
+                        <td>$694.51</td>
+                        <td>$130</td>
+                        <td>0.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T19:04:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.19</td>
+                        <td>$694.93</td>
+                        <td>$130</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T19:04:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.29</td>
+                        <td>$694.99</td>
+                        <td>$201</td>
+                        <td>0.1</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T19:24:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.29</td>
+                        <td>$695.49</td>
+                        <td>$201</td>
+                        <td>1.0</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T19:24:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.27</td>
+                        <td>$695.43</td>
+                        <td>$187</td>
+                        <td>0.1</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T19:44:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.27</td>
+                        <td>$695.56</td>
+                        <td>$187</td>
+                        <td>1.0</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-12T19:44:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.01</td>
+                        <td>$695.62</td>
+                        <td>$7</td>
+                        <td>0.1</td>
+                        <td>$0.00</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T13:37:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.01</td>
+                        <td>$696.30</td>
+                        <td>$7</td>
+                        <td>1.0</td>
+                        <td>$0.00</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T13:37:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>2.27</td>
+                        <td>$696.26</td>
+                        <td>$1,583</td>
+                        <td>0.4</td>
+                        <td>$0.16</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T15:02:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>2.27</td>
+                        <td>$693.35</td>
+                        <td>$1,583</td>
+                        <td>1.0</td>
+                        <td>$0.16</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T15:02:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>2.64</td>
+                        <td>$693.33</td>
+                        <td>$1,828</td>
+                        <td>1.2</td>
+                        <td>$0.18</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T15:42:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>2.64</td>
+                        <td>$693.28</td>
+                        <td>$1,828</td>
+                        <td>1.0</td>
+                        <td>$0.18</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T15:42:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.35</td>
+                        <td>$693.24</td>
+                        <td>$245</td>
+                        <td>0.3</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T16:22:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.35</td>
+                        <td>$693.70</td>
+                        <td>$245</td>
+                        <td>1.0</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T16:22:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.23</td>
+                        <td>$693.74</td>
+                        <td>$159</td>
+                        <td>0.4</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T16:42:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.23</td>
+                        <td>$694.71</td>
+                        <td>$159</td>
+                        <td>1.0</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T16:42:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.41</td>
+                        <td>$694.68</td>
+                        <td>$980</td>
+                        <td>0.5</td>
+                        <td>$0.10</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T17:02:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>1.41</td>
+                        <td>$694.83</td>
+                        <td>$980</td>
+                        <td>1.0</td>
+                        <td>$0.10</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T17:02:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.17</td>
+                        <td>$694.88</td>
+                        <td>$115</td>
+                        <td>0.3</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T19:02:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.17</td>
+                        <td>$692.84</td>
+                        <td>$115</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T19:02:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.13</td>
+                        <td>$692.78</td>
+                        <td>$87</td>
+                        <td>0.1</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T20:02:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.13</td>
+                        <td>$692.47</td>
+                        <td>$87</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T20:02:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.63</td>
+                        <td>$692.52</td>
+                        <td>$433</td>
+                        <td>0.3</td>
+                        <td>$0.04</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T20:42:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.63</td>
+                        <td>$692.27</td>
+                        <td>$433</td>
+                        <td>1.0</td>
+                        <td>$0.04</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-13T20:42:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.86</td>
+                        <td>$692.21</td>
+                        <td>$593</td>
+                        <td>0.1</td>
+                        <td>$0.06</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T13:36:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.86</td>
+                        <td>$691.03</td>
+                        <td>$593</td>
+                        <td>1.0</td>
+                        <td>$0.06</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T13:36:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>5.42</td>
+                        <td>$691.10</td>
+                        <td>$3,748</td>
+                        <td>0.0</td>
+                        <td>$0.37</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T15:21:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>5.42</td>
+                        <td>$690.33</td>
+                        <td>$3,748</td>
+                        <td>1.0</td>
+                        <td>$0.37</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T15:21:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.81</td>
+                        <td>$690.30</td>
+                        <td>$1,248</td>
+                        <td>0.5</td>
+                        <td>$0.12</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T16:41:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>1.81</td>
+                        <td>$687.84</td>
+                        <td>$1,248</td>
+                        <td>1.0</td>
+                        <td>$0.12</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T16:41:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>2.64</td>
+                        <td>$687.89</td>
+                        <td>$1,814</td>
+                        <td>0.3</td>
+                        <td>$0.18</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T17:01:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>2.64</td>
+                        <td>$686.76</td>
+                        <td>$1,814</td>
+                        <td>1.0</td>
+                        <td>$0.18</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T17:01:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.91</td>
+                        <td>$686.71</td>
+                        <td>$627</td>
+                        <td>0.2</td>
+                        <td>$0.06</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T17:21:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.91</td>
+                        <td>$686.24</td>
+                        <td>$627</td>
+                        <td>1.0</td>
+                        <td>$0.06</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T17:21:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>1.91</td>
+                        <td>$686.28</td>
+                        <td>$1,310</td>
+                        <td>0.4</td>
+                        <td>$0.13</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T17:41:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.91</td>
+                        <td>$686.82</td>
+                        <td>$1,310</td>
+                        <td>1.0</td>
+                        <td>$0.13</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T17:41:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.13</td>
+                        <td>$686.77</td>
+                        <td>$87</td>
+                        <td>0.3</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T18:41:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.13</td>
+                        <td>$686.59</td>
+                        <td>$87</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T18:41:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>1.23</td>
+                        <td>$686.63</td>
+                        <td>$844</td>
+                        <td>0.3</td>
+                        <td>$0.08</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T19:01:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.23</td>
+                        <td>$688.20</td>
+                        <td>$844</td>
+                        <td>1.0</td>
+                        <td>$0.08</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T19:01:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.76</td>
+                        <td>$688.15</td>
+                        <td>$523</td>
+                        <td>0.2</td>
+                        <td>$0.05</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T20:01:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.76</td>
+                        <td>$687.45</td>
+                        <td>$523</td>
+                        <td>1.0</td>
+                        <td>$0.05</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T20:01:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>1.96</td>
+                        <td>$687.49</td>
+                        <td>$1,351</td>
+                        <td>0.4</td>
+                        <td>$0.14</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T20:41:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.96</td>
+                        <td>$690.12</td>
+                        <td>$1,351</td>
+                        <td>1.0</td>
+                        <td>$0.14</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-14T20:41:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.03</td>
+                        <td>$690.09</td>
+                        <td>$711</td>
+                        <td>0.5</td>
+                        <td>$0.07</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T14:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>1.03</td>
+                        <td>$693.21</td>
+                        <td>$711</td>
+                        <td>1.0</td>
+                        <td>$0.07</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T14:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.84</td>
+                        <td>$693.25</td>
+                        <td>$584</td>
+                        <td>0.4</td>
+                        <td>$0.06</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T15:12:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.84</td>
+                        <td>$694.00</td>
+                        <td>$584</td>
+                        <td>1.0</td>
+                        <td>$0.06</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T15:12:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.14</td>
+                        <td>$693.95</td>
+                        <td>$94</td>
+                        <td>0.3</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T15:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.14</td>
+                        <td>$693.06</td>
+                        <td>$94</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T15:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>2.81</td>
+                        <td>$693.08</td>
+                        <td>$1,951</td>
+                        <td>0.7</td>
+                        <td>$0.20</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T16:32:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>2.81</td>
+                        <td>$695.09</td>
+                        <td>$1,951</td>
+                        <td>1.0</td>
+                        <td>$0.20</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T16:32:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.06</td>
+                        <td>$695.03</td>
+                        <td>$43</td>
+                        <td>0.1</td>
+                        <td>$0.00</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T17:12:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.06</td>
+                        <td>$695.18</td>
+                        <td>$43</td>
+                        <td>1.0</td>
+                        <td>$0.00</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T17:12:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.11</td>
+                        <td>$695.24</td>
+                        <td>$79</td>
+                        <td>0.1</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T17:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.11</td>
+                        <td>$694.69</td>
+                        <td>$79</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T17:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.11</td>
+                        <td>$694.63</td>
+                        <td>$79</td>
+                        <td>0.2</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T18:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.11</td>
+                        <td>$694.73</td>
+                        <td>$79</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T18:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.43</td>
+                        <td>$694.79</td>
+                        <td>$302</td>
+                        <td>0.1</td>
+                        <td>$0.03</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T20:32:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.43</td>
+                        <td>$692.01</td>
+                        <td>$302</td>
+                        <td>1.0</td>
+                        <td>$0.03</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T20:32:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.07</td>
+                        <td>$691.97</td>
+                        <td>$51</td>
+                        <td>0.4</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T20:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.07</td>
+                        <td>$691.55</td>
+                        <td>$51</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-15T20:52:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.70</td>
+                        <td>$691.59</td>
+                        <td>$484</td>
+                        <td>0.5</td>
+                        <td>$0.05</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T14:37:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.70</td>
+                        <td>$693.90</td>
+                        <td>$484</td>
+                        <td>1.0</td>
+                        <td>$0.05</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T14:37:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>3.72</td>
+                        <td>$693.86</td>
+                        <td>$2,579</td>
+                        <td>0.4</td>
+                        <td>$0.26</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T14:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>3.72</td>
+                        <td>$692.30</td>
+                        <td>$2,579</td>
+                        <td>1.0</td>
+                        <td>$0.26</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T14:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>2.39</td>
+                        <td>$692.35</td>
+                        <td>$1,658</td>
+                        <td>0.2</td>
+                        <td>$0.17</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T15:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>2.39</td>
+                        <td>$691.76</td>
+                        <td>$1,658</td>
+                        <td>1.0</td>
+                        <td>$0.17</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T15:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>2.31</td>
+                        <td>$691.74</td>
+                        <td>$1,600</td>
+                        <td>0.7</td>
+                        <td>$0.16</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T16:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>2.31</td>
+                        <td>$692.45</td>
+                        <td>$1,600</td>
+                        <td>1.0</td>
+                        <td>$0.16</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T16:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>1.24</td>
+                        <td>$692.48</td>
+                        <td>$858</td>
+                        <td>0.6</td>
+                        <td>$0.09</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T17:37:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.24</td>
+                        <td>$692.86</td>
+                        <td>$858</td>
+                        <td>1.0</td>
+                        <td>$0.09</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T17:37:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.15</td>
+                        <td>$692.81</td>
+                        <td>$101</td>
+                        <td>0.2</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T17:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.15</td>
+                        <td>$692.14</td>
+                        <td>$101</td>
+                        <td>1.0</td>
+                        <td>$0.01</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T17:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.51</td>
+                        <td>$692.19</td>
+                        <td>$354</td>
+                        <td>0.3</td>
+                        <td>$0.04</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T18:17:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.51</td>
+                        <td>$693.05</td>
+                        <td>$354</td>
+                        <td>1.0</td>
+                        <td>$0.04</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T18:17:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.06</td>
+                        <td>$692.99</td>
+                        <td>$737</td>
+                        <td>0.1</td>
+                        <td>$0.07</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T18:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>1.06</td>
+                        <td>$692.63</td>
+                        <td>$737</td>
+                        <td>1.0</td>
+                        <td>$0.07</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T18:57:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="sell">SELL</td>
+                        <td>0.35</td>
+                        <td>$692.69</td>
+                        <td>$245</td>
+                        <td>0.1</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T19:37:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>0.35</td>
+                        <td>$692.61</td>
+                        <td>$245</td>
+                        <td>1.0</td>
+                        <td>$0.02</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2026-01-16T19:37:00+00:00</td>
+                        <td>SPY</td>
+                        <td class="buy">BUY</td>
+                        <td>1.04</td>
+                        <td>$692.56</td>
+                        <td>$723</td>
+                        <td>0.2</td>
+                        <td>$0.07</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </div>
+
+        <footer>
+            <p>Generated by autoBot Backtester</p>
+        </footer>
+    </div>
+
+    <script>
+        const equityData = [{"x": "2025-12-17T14:34:00+00:00", "y": 101057.98639175865}, {"x": "2025-12-17T14:54:00+00:00", "y": 99915.0874112115}, {"x": "2025-12-17T15:14:00+00:00", "y": 100003.70712628803}, {"x": "2025-12-17T15:34:00+00:00", "y": 101314.18440484817}, {"x": "2025-12-17T15:54:00+00:00", "y": 102625.08996073114}, {"x": "2025-12-17T16:14:00+00:00", "y": 102625.08996073116}, {"x": "2025-12-17T16:35:00+00:00", "y": 102625.08996073116}, {"x": "2025-12-17T16:55:00+00:00", "y": 102625.08996073116}, {"x": "2025-12-17T17:15:00+00:00", "y": 102625.08996073114}, {"x": "2025-12-17T17:36:00+00:00", "y": 102625.08996073114}, {"x": "2025-12-17T17:56:00+00:00", "y": 99409.73891211397}, {"x": "2025-12-17T18:16:00+00:00", "y": 102254.65381830365}, {"x": "2025-12-17T18:36:00+00:00", "y": 99843.55207222833}, {"x": "2025-12-17T18:56:00+00:00", "y": 100459.61264577776}, {"x": "2025-12-17T19:16:00+00:00", "y": 99566.5609525457}, {"x": "2025-12-17T19:36:00+00:00", "y": 100279.49738746886}, {"x": "2025-12-17T19:56:00+00:00", "y": 99312.24352277712}, {"x": "2025-12-17T20:16:00+00:00", "y": 100010.74165422014}, {"x": "2025-12-17T20:36:00+00:00", "y": 100120.14933737404}, {"x": "2025-12-17T20:56:00+00:00", "y": 100231.69174579775}, {"x": "2025-12-18T13:21:00+00:00", "y": 97659.53723588635}, {"x": "2025-12-18T14:33:00+00:00", "y": 100030.28162927342}, {"x": "2025-12-18T14:53:00+00:00", "y": 100025.86064627016}, {"x": "2025-12-18T15:13:00+00:00", "y": 102651.75685811808}, {"x": "2025-12-18T15:33:00+00:00", "y": 98235.56787879884}, {"x": "2025-12-18T15:53:00+00:00", "y": 100669.97330238059}, {"x": "2025-12-18T16:13:00+00:00", "y": 99264.34587547685}, {"x": "2025-12-18T16:33:00+00:00", "y": 100321.66682987519}, {"x": "2025-12-18T16:53:00+00:00", "y": 100645.0963589912}, {"x": "2025-12-18T17:13:00+00:00", "y": 100645.09635899121}, {"x": "2025-12-18T17:33:00+00:00", "y": 99039.43836610677}, {"x": "2025-12-18T17:53:00+00:00", "y": 100108.30609403347}, {"x": "2025-12-18T18:13:00+00:00", "y": 98558.447949547}, {"x": "2025-12-18T18:33:00+00:00", "y": 100007.46943795847}, {"x": "2025-12-18T18:53:00+00:00", "y": 101400.44557057632}, {"x": "2025-12-18T19:13:00+00:00", "y": 99472.00015650268}, {"x": "2025-12-18T19:33:00+00:00", "y": 100430.49694714182}, {"x": "2025-12-18T19:53:00+00:00", "y": 99839.10483994489}, {"x": "2025-12-18T20:13:00+00:00", "y": 100002.0363542121}, {"x": "2025-12-18T20:33:00+00:00", "y": 100002.43538615377}, {"x": "2025-12-18T20:53:00+00:00", "y": 101181.61134360323}, {"x": "2025-12-19T14:16:00+00:00", "y": 99783.32534353578}, {"x": "2025-12-19T14:48:00+00:00", "y": 100007.11310393529}, {"x": "2025-12-19T15:08:00+00:00", "y": 100007.47736202012}, {"x": "2025-12-19T15:28:00+00:00", "y": 100007.31328180173}, {"x": "2025-12-19T15:48:00+00:00", "y": 101602.43352943026}, {"x": "2025-12-19T16:08:00+00:00", "y": 98896.88670010318}, {"x": "2025-12-19T16:28:00+00:00", "y": 100002.29735762169}, {"x": "2025-12-19T16:48:00+00:00", "y": 101058.25971153105}, {"x": "2025-12-19T17:08:00+00:00", "y": 99393.46455010679}, {"x": "2025-12-19T17:28:00+00:00", "y": 99997.84717533719}, {"x": "2025-12-19T17:48:00+00:00", "y": 99997.59880954679}, {"x": "2025-12-19T18:08:00+00:00", "y": 99998.00683905957}, {"x": "2025-12-19T18:28:00+00:00", "y": 100555.31649394802}, {"x": "2025-12-19T18:48:00+00:00", "y": 101113.3030435354}, {"x": "2025-12-19T19:08:00+00:00", "y": 99644.41791057421}, {"x": "2025-12-19T19:28:00+00:00", "y": 100033.97655471129}, {"x": "2025-12-19T19:48:00+00:00", "y": 100070.70372326692}, {"x": "2025-12-19T20:08:00+00:00", "y": 100070.70372326691}, {"x": "2025-12-19T20:28:00+00:00", "y": 100070.70372326692}, {"x": "2025-12-19T20:48:00+00:00", "y": 100070.70372326692}, {"x": "2025-12-19T21:10:00+00:00", "y": 99188.48663548157}, {"x": "2025-12-22T13:36:00+00:00", "y": 100003.50610777715}, {"x": "2025-12-22T14:46:00+00:00", "y": 100529.26809407945}, {"x": "2025-12-22T15:06:00+00:00", "y": 101055.89185066242}, {"x": "2025-12-22T15:26:00+00:00", "y": 99489.32043983697}, {"x": "2025-12-22T15:46:00+00:00", "y": 100001.66908852608}, {"x": "2025-12-22T16:06:00+00:00", "y": 100002.05112196297}, {"x": "2025-12-22T16:26:00+00:00", "y": 100309.17368614295}, {"x": "2025-12-22T16:46:00+00:00", "y": 100615.81913099799}, {"x": "2025-12-22T17:06:00+00:00", "y": 99958.33029845972}, {"x": "2025-12-22T17:26:00+00:00", "y": 100498.43228349667}, {"x": "2025-12-22T17:46:00+00:00", "y": 99935.72312588747}, {"x": "2025-12-22T18:06:00+00:00", "y": 100402.7333004754}, {"x": "2025-12-22T18:26:00+00:00", "y": 100804.07597414749}, {"x": "2025-12-22T18:46:00+00:00", "y": 100804.07597414749}, {"x": "2025-12-22T19:06:00+00:00", "y": 100804.07597414749}, {"x": "2025-12-22T19:26:00+00:00", "y": 99563.03199045078}, {"x": "2025-12-22T19:46:00+00:00", "y": 100074.3040626542}, {"x": "2025-12-22T20:06:00+00:00", "y": 99855.19847685116}, {"x": "2025-12-22T20:26:00+00:00", "y": 100001.24197932665}, {"x": "2025-12-22T20:46:00+00:00", "y": 100344.15148460146}, {"x": "2025-12-22T21:28:00+00:00", "y": 100687.18963482286}, {"x": "2025-12-23T14:39:00+00:00", "y": 97623.50605463823}, {"x": "2025-12-23T14:59:00+00:00", "y": 100713.26511623079}, {"x": "2025-12-23T15:19:00+00:00", "y": 99429.27415844129}, {"x": "2025-12-23T15:39:00+00:00", "y": 99999.77013169958}, {"x": "2025-12-23T15:59:00+00:00", "y": 100000.36838519298}, {"x": "2025-12-23T16:19:00+00:00", "y": 100000.93340238118}, {"x": "2025-12-23T16:39:00+00:00", "y": 100000.73398455007}, {"x": "2025-12-23T16:59:00+00:00", "y": 100001.36547434864}, {"x": "2025-12-23T17:19:00+00:00", "y": 100001.4734923405}, {"x": "2025-12-23T17:39:00+00:00", "y": 100008.6308591048}, {"x": "2025-12-23T17:59:00+00:00", "y": 99906.71667075538}, {"x": "2025-12-23T18:19:00+00:00", "y": 100001.4481875126}, {"x": "2025-12-23T18:39:00+00:00", "y": 100001.50603498082}, {"x": "2025-12-23T18:59:00+00:00", "y": 100117.76676609633}, {"x": "2025-12-23T19:19:00+00:00", "y": 99899.45991951217}, {"x": "2025-12-23T19:39:00+00:00", "y": 100146.53183824588}, {"x": "2025-12-23T19:59:00+00:00", "y": 99986.50437695351}, {"x": "2025-12-23T20:19:00+00:00", "y": 100001.04573203303}, {"x": "2025-12-23T20:39:00+00:00", "y": 100001.04530932268}, {"x": "2025-12-23T20:59:00+00:00", "y": 100008.30480753502}, {"x": "2025-12-24T14:04:00+00:00", "y": 99550.28248376444}, {"x": "2025-12-24T14:49:00+00:00", "y": 100001.22489602256}, {"x": "2025-12-24T15:09:00+00:00", "y": 100001.94531869664}, {"x": "2025-12-24T15:29:00+00:00", "y": 100002.28588214259}, {"x": "2025-12-24T15:49:00+00:00", "y": 100002.44961456853}, {"x": "2025-12-24T16:09:00+00:00", "y": 100002.82947379668}, {"x": "2025-12-24T16:29:00+00:00", "y": 100003.32722037152}, {"x": "2025-12-24T16:49:00+00:00", "y": 100003.84461483746}, {"x": "2025-12-24T17:09:00+00:00", "y": 100004.10658671896}, {"x": "2025-12-24T17:29:00+00:00", "y": 100004.15898109526}, {"x": "2025-12-24T17:49:00+00:00", "y": 100329.41846080092}, {"x": "2025-12-26T14:36:00+00:00", "y": 98502.95357137063}, {"x": "2025-12-26T14:56:00+00:00", "y": 101069.00012280441}, {"x": "2025-12-26T15:16:00+00:00", "y": 102139.16845739115}, {"x": "2025-12-26T15:39:00+00:00", "y": 99867.53815847583}, {"x": "2025-12-26T15:59:00+00:00", "y": 99997.80885972803}, {"x": "2025-12-26T16:19:00+00:00", "y": 100844.47367573656}, {"x": "2025-12-26T16:40:00+00:00", "y": 101691.59382923188}, {"x": "2025-12-26T17:02:00+00:00", "y": 101691.59382923186}, {"x": "2025-12-26T17:23:00+00:00", "y": 101691.59382923188}, {"x": "2025-12-26T17:45:00+00:00", "y": 101691.59382923186}, {"x": "2025-12-26T18:08:00+00:00", "y": 99830.31501119587}, {"x": "2025-12-26T18:29:00+00:00", "y": 100069.31217817318}, {"x": "2025-12-26T18:52:00+00:00", "y": 99641.54447476866}, {"x": "2025-12-26T19:13:00+00:00", "y": 99996.44968080832}, {"x": "2025-12-26T19:35:00+00:00", "y": 99706.58662740627}, {"x": "2025-12-26T19:56:00+00:00", "y": 100032.39907803634}, {"x": "2025-12-26T20:16:00+00:00", "y": 99800.49881869619}, {"x": "2025-12-26T20:38:00+00:00", "y": 99996.2275087788}, {"x": "2025-12-26T20:58:00+00:00", "y": 100119.16186627331}, {"x": "2025-12-29T14:38:00+00:00", "y": 96974.84179357678}, {"x": "2025-12-29T14:58:00+00:00", "y": 100236.73373611705}, {"x": "2025-12-29T15:18:00+00:00", "y": 99487.26926368522}, {"x": "2025-12-29T15:38:00+00:00", "y": 99982.21140558664}, {"x": "2025-12-29T15:58:00+00:00", "y": 100251.16586776922}, {"x": "2025-12-29T16:18:00+00:00", "y": 100520.14722808782}, {"x": "2025-12-29T16:38:00+00:00", "y": 100520.14722808782}, {"x": "2025-12-29T16:58:00+00:00", "y": 99778.55550559072}, {"x": "2025-12-29T17:18:00+00:00", "y": 99982.09285399878}, {"x": "2025-12-29T17:38:00+00:00", "y": 99981.79632658465}, {"x": "2025-12-29T17:58:00+00:00", "y": 99982.22925660927}, {"x": "2025-12-29T18:18:00+00:00", "y": 99982.31228428523}, {"x": "2025-12-29T18:38:00+00:00", "y": 99982.5910200545}, {"x": "2025-12-29T18:58:00+00:00", "y": 100338.57951407306}, {"x": "2025-12-29T19:18:00+00:00", "y": 99974.94493668374}, {"x": "2025-12-29T19:38:00+00:00", "y": 99982.23902124834}, {"x": "2025-12-29T19:58:00+00:00", "y": 99982.25279385356}, {"x": "2025-12-29T20:18:00+00:00", "y": 99982.25395922785}, {"x": "2025-12-29T20:38:00+00:00", "y": 100156.57195930442}, {"x": "2025-12-29T20:58:00+00:00", "y": 100330.91707546185}, {"x": "2025-12-30T14:31:00+00:00", "y": 100330.91707546185}, {"x": "2025-12-30T14:51:00+00:00", "y": 98941.69337226076}, {"x": "2025-12-30T15:11:00+00:00", "y": 100996.9202019976}, {"x": "2025-12-30T15:31:00+00:00", "y": 102014.36206246274}, {"x": "2025-12-30T15:51:00+00:00", "y": 99090.36819677276}, {"x": "2025-12-30T16:11:00+00:00", "y": 99979.29156736069}, {"x": "2025-12-30T16:31:00+00:00", "y": 100516.62236385175}, {"x": "2025-12-30T16:51:00+00:00", "y": 101054.00689879632}, {"x": "2025-12-30T17:11:00+00:00", "y": 99922.13939566365}, {"x": "2025-12-30T17:31:00+00:00", "y": 99980.38093946764}, {"x": "2025-12-30T17:51:00+00:00", "y": 99980.38062349585}, {"x": "2025-12-30T18:11:00+00:00", "y": 99420.16165070378}, {"x": "2025-12-30T18:31:00+00:00", "y": 99980.39647253914}, {"x": "2025-12-30T18:51:00+00:00", "y": 99980.41276283644}, {"x": "2025-12-30T19:11:00+00:00", "y": 100205.22694284216}, {"x": "2025-12-30T19:31:00+00:00", "y": 100430.58806586744}, {"x": "2025-12-30T19:51:00+00:00", "y": 100430.58806586744}, {"x": "2025-12-30T20:11:00+00:00", "y": 100430.58806586744}, {"x": "2025-12-30T20:31:00+00:00", "y": 100430.58806586744}, {"x": "2025-12-30T20:51:00+00:00", "y": 100430.58806586744}, {"x": "2025-12-30T21:17:00+00:00", "y": 99951.02385597542}, {"x": "2025-12-31T14:44:00+00:00", "y": 101341.30160168906}, {"x": "2025-12-31T15:04:00+00:00", "y": 102702.71747419622}, {"x": "2025-12-31T15:24:00+00:00", "y": 102702.71747419622}, {"x": "2025-12-31T15:44:00+00:00", "y": 102702.71747419621}, {"x": "2025-12-31T16:04:00+00:00", "y": 102702.71747419622}, {"x": "2025-12-31T16:24:00+00:00", "y": 99500.81116367842}, {"x": "2025-12-31T16:44:00+00:00", "y": 99982.88496946084}, {"x": "2025-12-31T17:04:00+00:00", "y": 99983.43398336612}, {"x": "2025-12-31T17:24:00+00:00", "y": 100070.23153189021}, {"x": "2025-12-31T17:44:00+00:00", "y": 100157.82788788175}, {"x": "2025-12-31T18:04:00+00:00", "y": 100157.82788788174}, {"x": "2025-12-31T18:24:00+00:00", "y": 100157.82788788175}, {"x": "2025-12-31T18:44:00+00:00", "y": 99690.58310527947}, {"x": "2025-12-31T19:04:00+00:00", "y": 99982.66409811728}, {"x": "2025-12-31T19:24:00+00:00", "y": 100652.57226046221}, {"x": "2025-12-31T19:44:00+00:00", "y": 99376.52086143331}, {"x": "2025-12-31T20:04:00+00:00", "y": 100711.79682579316}, {"x": "2025-12-31T20:24:00+00:00", "y": 101442.6841229718}, {"x": "2025-12-31T20:44:00+00:00", "y": 99827.16397722413}, {"x": "2026-01-02T13:24:00+00:00", "y": 99981.86505451362}, {"x": "2026-01-02T14:48:00+00:00", "y": 99982.01344304638}, {"x": "2026-01-02T15:08:00+00:00", "y": 100389.85320712792}, {"x": "2026-01-02T15:28:00+00:00", "y": 100797.87372473105}, {"x": "2026-01-02T15:48:00+00:00", "y": 98959.28706632997}, {"x": "2026-01-02T16:08:00+00:00", "y": 100342.8499370265}, {"x": "2026-01-02T16:28:00+00:00", "y": 98712.66567145423}, {"x": "2026-01-02T16:48:00+00:00", "y": 101091.5909233338}, {"x": "2026-01-02T17:08:00+00:00", "y": 99426.174140063}, {"x": "2026-01-02T17:28:00+00:00", "y": 100044.56466139972}, {"x": "2026-01-02T17:48:00+00:00", "y": 100117.84889429716}, {"x": "2026-01-02T18:08:00+00:00", "y": 100117.84889429716}, {"x": "2026-01-02T18:28:00+00:00", "y": 100117.84889429716}, {"x": "2026-01-02T18:48:00+00:00", "y": 100117.84889429716}, {"x": "2026-01-02T19:08:00+00:00", "y": 98155.5939267179}, {"x": "2026-01-02T19:28:00+00:00", "y": 99977.73131763293}, {"x": "2026-01-02T19:48:00+00:00", "y": 100375.67149310705}, {"x": "2026-01-02T20:08:00+00:00", "y": 99548.75902661908}, {"x": "2026-01-02T20:28:00+00:00", "y": 100017.12062204815}, {"x": "2026-01-02T20:48:00+00:00", "y": 100053.70375722267}, {"x": "2026-01-05T14:30:00+00:00", "y": 93308.06796241934}, {"x": "2026-01-05T14:50:00+00:00", "y": 100201.8526788513}, {"x": "2026-01-05T15:10:00+00:00", "y": 99349.54736034205}, {"x": "2026-01-05T15:30:00+00:00", "y": 99962.6523427425}, {"x": "2026-01-05T15:50:00+00:00", "y": 100107.14143209183}, {"x": "2026-01-05T16:10:00+00:00", "y": 99387.52234946049}, {"x": "2026-01-05T16:30:00+00:00", "y": 99961.70783125062}, {"x": "2026-01-05T16:50:00+00:00", "y": 99962.75827794865}, {"x": "2026-01-05T17:10:00+00:00", "y": 100208.44727462894}, {"x": "2026-01-05T17:30:00+00:00", "y": 100455.18167230647}, {"x": "2026-01-05T17:50:00+00:00", "y": 99860.08410447504}, {"x": "2026-01-05T18:10:00+00:00", "y": 100085.10884476607}, {"x": "2026-01-05T18:30:00+00:00", "y": 99031.0529001606}, {"x": "2026-01-05T18:50:00+00:00", "y": 99961.46011014083}, {"x": "2026-01-05T19:10:00+00:00", "y": 100410.55251670098}, {"x": "2026-01-05T19:30:00+00:00", "y": 100860.69554601832}, {"x": "2026-01-05T19:50:00+00:00", "y": 100860.69554601832}, {"x": "2026-01-05T20:10:00+00:00", "y": 99407.93021726083}, {"x": "2026-01-05T20:30:00+00:00", "y": 99960.63510693244}, {"x": "2026-01-05T20:50:00+00:00", "y": 100163.39858864446}, {"x": "2026-01-05T21:20:00+00:00", "y": 99843.46379950455}, {"x": "2026-01-06T14:38:00+00:00", "y": 99959.9799364067}, {"x": "2026-01-06T14:58:00+00:00", "y": 99960.6618659122}, {"x": "2026-01-06T15:18:00+00:00", "y": 99960.7684702766}, {"x": "2026-01-06T15:38:00+00:00", "y": 100735.21013309811}, {"x": "2026-01-06T15:58:00+00:00", "y": 101509.92124549636}, {"x": "2026-01-06T16:18:00+00:00", "y": 99410.6396537213}, {"x": "2026-01-06T16:38:00+00:00", "y": 99962.74285951769}, {"x": "2026-01-06T16:58:00+00:00", "y": 99963.2956304106}, {"x": "2026-01-06T17:18:00+00:00", "y": 99964.32907164517}, {"x": "2026-01-06T17:38:00+00:00", "y": 99965.87522791084}, {"x": "2026-01-06T17:58:00+00:00", "y": 99965.82716087668}, {"x": "2026-01-06T18:18:00+00:00", "y": 99966.0915295646}, {"x": "2026-01-06T18:38:00+00:00", "y": 99965.77108267017}, {"x": "2026-01-06T18:58:00+00:00", "y": 99966.90866914543}, {"x": "2026-01-06T19:18:00+00:00", "y": 99967.4053618318}, {"x": "2026-01-06T19:38:00+00:00", "y": 100024.92636962018}, {"x": "2026-01-06T19:58:00+00:00", "y": 100082.72983782823}, {"x": "2026-01-06T20:18:00+00:00", "y": 99894.80927739774}, {"x": "2026-01-06T20:38:00+00:00", "y": 99967.08144207839}, {"x": "2026-01-06T20:58:00+00:00", "y": 100154.81034826103}, {"x": "2026-01-06T21:30:00+00:00", "y": 100342.63904848664}, {"x": "2026-01-07T14:32:00+00:00", "y": 99764.53050845927}, {"x": "2026-01-07T14:52:00+00:00", "y": 99967.36771663341}, {"x": "2026-01-07T15:12:00+00:00", "y": 99974.01373400354}, {"x": "2026-01-07T15:32:00+00:00", "y": 99055.49034063058}, {"x": "2026-01-07T15:52:00+00:00", "y": 99967.35882294877}, {"x": "2026-01-07T16:12:00+00:00", "y": 100119.11157475488}, {"x": "2026-01-07T16:32:00+00:00", "y": 99866.39799604425}, {"x": "2026-01-07T16:52:00+00:00", "y": 99967.70743825067}, {"x": "2026-01-07T17:12:00+00:00", "y": 99967.85927823126}, {"x": "2026-01-07T17:32:00+00:00", "y": 100493.76864993657}, {"x": "2026-01-07T17:52:00+00:00", "y": 101019.86444261161}, {"x": "2026-01-07T18:12:00+00:00", "y": 101019.86444261161}, {"x": "2026-01-07T18:32:00+00:00", "y": 101019.86444261161}, {"x": "2026-01-07T18:52:00+00:00", "y": 99534.79324495645}, {"x": "2026-01-07T19:12:00+00:00", "y": 101200.17038412113}, {"x": "2026-01-07T19:32:00+00:00", "y": 99451.74250938691}, {"x": "2026-01-07T19:52:00+00:00", "y": 100043.98221458794}, {"x": "2026-01-07T20:12:00+00:00", "y": 100123.4711728491}, {"x": "2026-01-07T20:32:00+00:00", "y": 100123.47117284911}, {"x": "2026-01-07T20:52:00+00:00", "y": 99798.15970330188}, {"x": "2026-01-07T21:16:00+00:00", "y": 100240.02269800007}, {"x": "2026-01-08T14:36:00+00:00", "y": 100515.58869605664}, {"x": "2026-01-08T14:56:00+00:00", "y": 99558.01893727168}, {"x": "2026-01-08T15:16:00+00:00", "y": 99966.23486664864}, {"x": "2026-01-08T15:36:00+00:00", "y": 101059.5118908054}, {"x": "2026-01-08T15:56:00+00:00", "y": 102154.1828008323}, {"x": "2026-01-08T16:16:00+00:00", "y": 102154.1828008323}, {"x": "2026-01-08T16:36:00+00:00", "y": 102154.1828008323}, {"x": "2026-01-08T16:56:00+00:00", "y": 102154.1828008323}, {"x": "2026-01-08T17:16:00+00:00", "y": 99787.83769784936}, {"x": "2026-01-08T17:36:00+00:00", "y": 99962.03104054826}, {"x": "2026-01-08T17:56:00+00:00", "y": 99962.23038525933}, {"x": "2026-01-08T18:16:00+00:00", "y": 100918.34079183973}, {"x": "2026-01-08T18:36:00+00:00", "y": 99915.79291580332}, {"x": "2026-01-08T18:56:00+00:00", "y": 101032.13256142334}, {"x": "2026-01-08T19:16:00+00:00", "y": 102105.17172735294}, {"x": "2026-01-08T19:36:00+00:00", "y": 102105.17172735294}, {"x": "2026-01-08T19:56:00+00:00", "y": 102105.17172735294}, {"x": "2026-01-08T20:16:00+00:00", "y": 99522.10590211778}, {"x": "2026-01-08T20:36:00+00:00", "y": 99958.58570949502}, {"x": "2026-01-08T20:56:00+00:00", "y": 99958.3898081981}, {"x": "2026-01-09T13:10:00+00:00", "y": 99959.78639486324}, {"x": "2026-01-09T14:35:00+00:00", "y": 101115.9097484257}, {"x": "2026-01-09T14:55:00+00:00", "y": 102271.96240662421}, {"x": "2026-01-09T15:15:00+00:00", "y": 98437.27720804243}, {"x": "2026-01-09T15:35:00+00:00", "y": 99965.78074123821}, {"x": "2026-01-09T15:55:00+00:00", "y": 100232.01912873785}, {"x": "2026-01-09T16:15:00+00:00", "y": 98843.72852040573}, {"x": "2026-01-09T16:35:00+00:00", "y": 100536.718678415}, {"x": "2026-01-09T16:55:00+00:00", "y": 99156.79565270302}, {"x": "2026-01-09T17:15:00+00:00", "y": 100324.34404739916}, {"x": "2026-01-09T17:35:00+00:00", "y": 99920.27537595188}, {"x": "2026-01-09T17:55:00+00:00", "y": 100193.90295150313}, {"x": "2026-01-09T18:15:00+00:00", "y": 100438.79973471195}, {"x": "2026-01-09T18:35:00+00:00", "y": 98549.66517086138}, {"x": "2026-01-09T18:55:00+00:00", "y": 99990.90664615853}, {"x": "2026-01-09T19:15:00+00:00", "y": 99717.26207596713}, {"x": "2026-01-09T19:35:00+00:00", "y": 99947.74596765789}, {"x": "2026-01-09T19:55:00+00:00", "y": 99947.81561134814}, {"x": "2026-01-09T20:15:00+00:00", "y": 100242.53187024812}, {"x": "2026-01-09T20:35:00+00:00", "y": 100537.50226529279}, {"x": "2026-01-09T20:55:00+00:00", "y": 100537.50226529279}, {"x": "2026-01-09T21:23:00+00:00", "y": 100537.50226529279}, {"x": "2026-01-12T13:08:00+00:00", "y": 100537.50226529279}, {"x": "2026-01-12T14:44:00+00:00", "y": 98763.87878712089}, {"x": "2026-01-12T15:04:00+00:00", "y": 100087.23466562033}, {"x": "2026-01-12T15:24:00+00:00", "y": 99603.84998214862}, {"x": "2026-01-12T15:44:00+00:00", "y": 99949.81566533147}, {"x": "2026-01-12T16:04:00+00:00", "y": 99950.31974852638}, {"x": "2026-01-12T16:24:00+00:00", "y": 100094.60390688249}, {"x": "2026-01-12T16:44:00+00:00", "y": 100238.59653445985}, {"x": "2026-01-12T17:04:00+00:00", "y": 100238.59653445985}, {"x": "2026-01-12T17:24:00+00:00", "y": 100238.59653445985}, {"x": "2026-01-12T17:44:00+00:00", "y": 99820.85757781717}, {"x": "2026-01-12T18:04:00+00:00", "y": 99950.6216211527}, {"x": "2026-01-12T18:24:00+00:00", "y": 99950.68693966288}, {"x": "2026-01-12T18:44:00+00:00", "y": 99950.68320717657}, {"x": "2026-01-12T19:04:00+00:00", "y": 100151.96915998694}, {"x": "2026-01-12T19:24:00+00:00", "y": 99763.2477676083}, {"x": "2026-01-12T19:44:00+00:00", "y": 99957.44856725958}, {"x": "2026-01-12T20:04:00+00:00", "y": 99964.63588308475}, {"x": "2026-01-12T20:24:00+00:00", "y": 99964.63588308473}, {"x": "2026-01-12T20:44:00+00:00", "y": 99964.63588308475}, {"x": "2026-01-12T21:04:00+00:00", "y": 99964.63588308475}, {"x": "2026-01-13T13:37:00+00:00", "y": 98367.58139289198}, {"x": "2026-01-13T14:42:00+00:00", "y": 99948.16552704402}, {"x": "2026-01-13T15:02:00+00:00", "y": 101764.40376162785}, {"x": "2026-01-13T15:22:00+00:00", "y": 103592.47838161864}, {"x": "2026-01-13T15:42:00+00:00", "y": 99690.88726080075}, {"x": "2026-01-13T16:02:00+00:00", "y": 99936.5048938904}, {"x": "2026-01-13T16:22:00+00:00", "y": 100094.97679381384}, {"x": "2026-01-13T16:42:00+00:00", "y": 98955.95364011254}, {"x": "2026-01-13T17:02:00+00:00", "y": 100051.19032009276}, {"x": "2026-01-13T17:22:00+00:00", "y": 100166.29657755657}, {"x": "2026-01-13T17:42:00+00:00", "y": 100166.29657755657}, {"x": "2026-01-13T18:02:00+00:00", "y": 100166.29657755657}, {"x": "2026-01-13T18:22:00+00:00", "y": 100166.29657755655}, {"x": "2026-01-13T18:42:00+00:00", "y": 100166.29657755657}, {"x": "2026-01-13T19:02:00+00:00", "y": 99850.10560933093}, {"x": "2026-01-13T19:22:00+00:00", "y": 99936.74066322236}, {"x": "2026-01-13T19:42:00+00:00", "y": 99936.80067885824}, {"x": "2026-01-13T20:02:00+00:00", "y": 100369.56820218284}, {"x": "2026-01-13T20:22:00+00:00", "y": 100802.5498581933}, {"x": "2026-01-13T20:42:00+00:00", "y": 99344.05161471014}, {"x": "2026-01-13T21:02:00+00:00", "y": 99939.5620862294}, {"x": "2026-01-14T13:36:00+00:00", "y": 103682.07204088106}, {"x": "2026-01-14T14:41:00+00:00", "y": 107429.92783492185}, {"x": "2026-01-14T15:01:00+00:00", "y": 107429.92783492185}, {"x": "2026-01-14T15:21:00+00:00", "y": 98694.0898035477}, {"x": "2026-01-14T15:41:00+00:00", "y": 99935.90384128394}, {"x": "2026-01-14T16:01:00+00:00", "y": 99930.5364134758}, {"x": "2026-01-14T16:21:00+00:00", "y": 99933.86168861618}, {"x": "2026-01-14T16:41:00+00:00", "y": 101746.00410301021}, {"x": "2026-01-14T17:01:00+00:00", "y": 99311.16838309812}, {"x": "2026-01-14T17:21:00+00:00", "y": 101246.25391374182}, {"x": "2026-01-14T17:41:00+00:00", "y": 99846.94782110887}, {"x": "2026-01-14T18:01:00+00:00", "y": 99934.30495889284}, {"x": "2026-01-14T18:21:00+00:00", "y": 99934.469088187}, {"x": "2026-01-14T18:41:00+00:00", "y": 100778.09684643365}, {"x": "2026-01-14T19:01:00+00:00", "y": 99406.64522545823}, {"x": "2026-01-14T19:21:00+00:00", "y": 99929.8639529861}, {"x": "2026-01-14T19:41:00+00:00", "y": 99930.28232070463}, {"x": "2026-01-14T20:01:00+00:00", "y": 101279.59205918308}, {"x": "2026-01-14T20:21:00+00:00", "y": 102630.3938253928}, {"x": "2026-01-14T20:41:00+00:00", "y": 99207.47642426538}, {"x": "2026-01-14T21:36:00+00:00", "y": 99917.19096163471}, {"x": "2026-01-15T14:32:00+00:00", "y": 99927.11799688105}, {"x": "2026-01-15T14:52:00+00:00", "y": 100508.15415248432}, {"x": "2026-01-15T15:12:00+00:00", "y": 99829.28006258838}, {"x": "2026-01-15T15:32:00+00:00", "y": 99923.07171041322}, {"x": "2026-01-15T15:52:00+00:00", "y": 101873.49758527853}, {"x": "2026-01-15T16:12:00+00:00", "y": 103824.48531781329}, {"x": "2026-01-15T16:32:00+00:00", "y": 99867.6318639042}, {"x": "2026-01-15T16:52:00+00:00", "y": 99910.82916259376}, {"x": "2026-01-15T17:12:00+00:00", "y": 99989.8994707893}, {"x": "2026-01-15T17:32:00+00:00", "y": 100068.99803479087}, {"x": "2026-01-15T17:52:00+00:00", "y": 99831.71196976186}, {"x": "2026-01-15T18:12:00+00:00", "y": 99910.87468631587}, {"x": "2026-01-15T18:32:00+00:00", "y": 99910.97272921367}, {"x": "2026-01-15T18:52:00+00:00", "y": 100213.0176837623}, {"x": "2026-01-15T19:12:00+00:00", "y": 100515.15639420557}, {"x": "2026-01-15T19:32:00+00:00", "y": 100515.15639420557}, {"x": "2026-01-15T19:52:00+00:00", "y": 100515.15639420557}, {"x": "2026-01-15T20:12:00+00:00", "y": 100515.15639420557}, {"x": "2026-01-15T20:32:00+00:00", "y": 99862.64368110025}, {"x": "2026-01-15T20:52:00+00:00", "y": 100397.22212749573}, {"x": "2026-01-16T14:37:00+00:00", "y": 97330.07891563598}, {"x": "2026-01-16T14:57:00+00:00", "y": 101555.35774076656}, {"x": "2026-01-16T15:17:00+00:00", "y": 103213.49341952073}, {"x": "2026-01-16T15:37:00+00:00", "y": 103213.49341952073}, {"x": "2026-01-16T15:57:00+00:00", "y": 98299.40243557883}, {"x": "2026-01-16T16:17:00+00:00", "y": 99902.6408950203}, {"x": "2026-01-16T16:37:00+00:00", "y": 99905.48621351235}, {"x": "2026-01-16T16:57:00+00:00", "y": 100760.87158737669}, {"x": "2026-01-16T17:17:00+00:00", "y": 101619.27164508446}, {"x": "2026-01-16T17:37:00+00:00", "y": 99800.28479635635}, {"x": "2026-01-16T17:57:00+00:00", "y": 100254.88631969992}, {"x": "2026-01-16T18:17:00+00:00", "y": 99163.53238562727}, {"x": "2026-01-16T18:37:00+00:00", "y": 99900.2843596896}, {"x": "2026-01-16T18:57:00+00:00", "y": 100144.4508172279}, {"x": "2026-01-16T19:17:00+00:00", "y": 100389.79646595081}, {"x": "2026-01-16T19:37:00+00:00", "y": 99176.5036981132}];
+
+        const ctx = document.getElementById('equityChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: equityData.map(d => d.x),
+                datasets: [{
+                    label: 'Equity',
+                    data: equityData.map(d => d.y),
+                    borderColor: '#0f3460',
+                    backgroundColor: 'rgba(15, 52, 96, 0.1)',
+                    fill: true,
+                    tension: 0.1,
+                    pointRadius: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        ticks: {
+                            maxTicksLimit: 10,
+                            color: '#aaa'
+                        },
+                        grid: {
+                            color: '#2a2a4e'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        ticks: {
+                            color: '#aaa'
+                        },
+                        grid: {
+                            color: '#2a2a4e'
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
