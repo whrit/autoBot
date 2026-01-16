@@ -7,6 +7,8 @@ onnxruntime>=1.17.0
 skl2onnx>=1.16.0
 scikit-learn>=1.4.0
 onnxmltools>=1.12.0
+structlog>=24.0.0
+rich>=13.0.0
 
 [dev]
 pytest>=8.0.0

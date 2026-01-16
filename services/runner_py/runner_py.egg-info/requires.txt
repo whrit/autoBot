@@ -4,6 +4,7 @@ polars>=1.0.0
 numpy>=2.0.0
 structlog>=24.0.0
 pyarrow>=15.0.0
+rich>=13.0.0
 common-types
 cost-models
 risk-models

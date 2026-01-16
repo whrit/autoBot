@@ -5,6 +5,9 @@ Requires-Python: >=3.12
 Requires-Dist: alpaca-py>=0.30.0
 Requires-Dist: pyarrow>=15.0.0
 Requires-Dist: polars>=1.0.0
+Requires-Dist: structlog>=24.0.0
+Requires-Dist: rich>=13.0.0
+Requires-Dist: logging_utils
 Provides-Extra: dev
 Requires-Dist: pytest>=8.0.0; extra == "dev"
 Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"

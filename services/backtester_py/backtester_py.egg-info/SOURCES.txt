@@ -3,12 +3,14 @@ backtester_py/__init__.py
 backtester_py/engine.py
 backtester_py/evaluation.py
 backtester_py/fills.py
+backtester_py/logging_config.py
 backtester_py/main.py
 backtester_py/metrics.py
 backtester_py/purged_cv.py
 backtester_py/regimes.py
 backtester_py/risk.py
 backtester_py/slippage.py
+backtester_py/visualization.py
 backtester_py/walk_forward.py
 backtester_py.egg-info/PKG-INFO
 backtester_py.egg-info/SOURCES.txt

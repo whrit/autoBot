@@ -5,6 +5,8 @@ Requires-Python: >=3.12
 Requires-Dist: polars>=1.0.0
 Requires-Dist: pyarrow>=15.0.0
 Requires-Dist: common_types
+Requires-Dist: structlog>=24.0.0
+Requires-Dist: rich>=13.0.0
 Provides-Extra: dev
 Requires-Dist: pytest>=8.0.0; extra == "dev"
 Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"

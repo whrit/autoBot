@@ -22,6 +22,9 @@ dev = [
 [tool.uv]
 package = true
 
+[tool.uv.sources]
+logging_utils = { workspace = true }
+
 [tool.mypy]
 python_version = "3.12"
 strict = true

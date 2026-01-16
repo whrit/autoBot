@@ -5,6 +5,8 @@ Requires-Python: >=3.12
 Requires-Dist: polars>=1.0.0
 Requires-Dist: numpy>=2.0.0
 Requires-Dist: scipy>=1.11.0
+Requires-Dist: structlog>=24.0.0
+Requires-Dist: rich>=13.0.0
 Requires-Dist: cost-models
 Requires-Dist: risk-models
 Requires-Dist: common-types

@@ -9,6 +9,7 @@ feature_builder_py/micro_bars.py
 feature_builder_py.egg-info/PKG-INFO
 feature_builder_py.egg-info/SOURCES.txt
 feature_builder_py.egg-info/dependency_links.txt
+feature_builder_py.egg-info/entry_points.txt
 feature_builder_py.egg-info/requires.txt
 feature_builder_py.egg-info/top_level.txt
 tests/test_feature_builder.py

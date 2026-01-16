@@ -3,6 +3,7 @@ runner_py/__init__.py
 runner_py/acceptance.py
 runner_py/benchmark.py
 runner_py/fill_stream.py
+runner_py/main.py
 runner_py/orchestrator.py
 runner_py/paper.py
 runner_py/promotion.py

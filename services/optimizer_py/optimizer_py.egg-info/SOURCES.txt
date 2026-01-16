@@ -3,6 +3,7 @@ optimizer_py/__init__.py
 optimizer_py/complexity.py
 optimizer_py/cost_sensitivity.py
 optimizer_py/gpu_support.py
+optimizer_py/logging_config.py
 optimizer_py/main.py
 optimizer_py/mean_reversion.py
 optimizer_py/ml_strategy.py

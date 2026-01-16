@@ -2,6 +2,7 @@ pyproject.toml
 ingestor_py/__init__.py
 ingestor_py/backfill.py
 ingestor_py/client.py
+ingestor_py/logging_config.py
 ingestor_py/main.py
 ingestor_py/streaming.py
 ingestor_py/universe.py

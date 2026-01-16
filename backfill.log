@@ -1,0 +1,38 @@
+nohup: ignoring input
+╭──────────────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│    autoBot Ingestor                                                          │
+│    Mode: Backfill                                                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+ Config      Value                
+ Lake Path   lake                 
+ Symbols     SPY, QQQ             
+ Feed        IEX                  
+ Days        90                   
+ Data Types  trades, quotes, bars 
+
+[06:19:36] [32mINFO [0m  ingestor_starting
+           ├── mode: backfill
+           ├── lake_path: lake
+           ├── symbols: ['SPY', 'QQQ']
+           └── feed: iex
+[06:19:36] [32mINFO [0m  backfill_starting
+           ├── symbols: ['SPY', 'QQQ']
+           ├── days: 90
+           ├── data_types: ['trades', 'quotes', 'bars']
+           └── feed: iex
+[06:19:36] [32mINFO [0m  parquet_writer_initialized
+           ├── base_path: lake
+           └── compression: snappy
+[06:19:36] [32mINFO [0m  backfill_orchestrator_initialized
+           ├── lake_path: lake
+           └── feed: iex
+[06:19:36] [32mINFO [0m  backfill_started
+           ├── symbols: ['SPY', 'QQQ']
+           ├── start: 2025-10-18T06:19:36.152641+00:00
+           ├── end: 2026-01-16T06:19:36.152641+00:00
+           └── data_types: ['trades', 'quotes', 'bars']
+
+Backfill Progress

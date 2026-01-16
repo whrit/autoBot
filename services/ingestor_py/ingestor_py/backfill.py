@@ -24,15 +24,20 @@ from rich.progress import (
 
 from ingestor_py.client import AlpacaDataClient
 from ingestor_py.logging_config import (
+    FileProgress,
     console,
     format_bytes,
     format_duration,
     format_number,
     get_logger,
+    is_file_mode,
 )
 from ingestor_py.writer import ParquetWriter
 
 logger = get_logger(__name__)
+
+# Type alias for progress tracker (Rich Progress or FileProgress)
+ProgressType = Progress | FileProgress
 
 
 class DataTypeSummary(TypedDict):
@@ -159,8 +164,16 @@ class BackfillOrchestrator:
             feed=feed,
         )
 
-    def _create_progress(self) -> Progress:
-        """Create a Rich progress bar for backfill tracking."""
+    def _create_progress(self) -> ProgressType:
+        """Create a progress tracker for backfill tracking.
+
+        Returns Rich Progress for interactive terminals, or FileProgress
+        for file-redirected output (e.g., nohup).
+        """
+        if is_file_mode():
+            logger.debug("using_file_progress_mode")
+            return FileProgress(log_interval=30.0, console=console)
+
         return Progress(
             SpinnerColumn(),
             TextColumn("[bold blue]{task.fields[symbol]}"),
@@ -182,7 +195,7 @@ class BackfillOrchestrator:
         symbol: str,
         start: datetime,
         end: datetime,
-        progress: Progress | None = None,
+        progress: ProgressType | None = None,
         task_id: TaskID | None = None,
     ) -> int:
         """Backfill trades for a single symbol.
@@ -235,7 +248,7 @@ class BackfillOrchestrator:
         symbol: str,
         start: datetime,
         end: datetime,
-        progress: Progress | None = None,
+        progress: ProgressType | None = None,
         task_id: TaskID | None = None,
     ) -> int:
         """Backfill quotes for a single symbol.

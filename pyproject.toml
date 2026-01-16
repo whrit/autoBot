@@ -58,7 +58,15 @@ members = [
   "libs/cost_models",
   "libs/risk_models",
   "libs/logging_utils",
+  "libs/viz_utils",
 ]
+
+[tool.uv.sources]
+logging_utils = { workspace = true }
+viz_utils = { workspace = true }
+common_types = { workspace = true }
+cost_models = { workspace = true }
+risk_models = { workspace = true }
 
 [tool.ruff]
 line-length = 100
