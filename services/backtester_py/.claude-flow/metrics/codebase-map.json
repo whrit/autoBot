@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-01-17T01:22:39.808Z",
+  "timestamp": "2026-01-17T02:22:40.063Z",
   "projectRoot": "/home/bw/Projects/autoBot/services/backtester_py",
   "structure": {
     "hasPackageJson": false,
@@ -7,5 +7,5 @@
     "hasClaudeConfig": false,
     "hasClaudeFlow": true
   },
-  "scannedAt": 1768612959808
+  "scannedAt": 1768616560063
 }
