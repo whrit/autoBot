@@ -134,6 +134,11 @@ def run_backtest(
     strategy: str = "Momentum",
     start_date: str | None = None,
     end_date: str | None = None,
+    cost_model: str = "fixed",
+    fee_rate: float = 0.001,
+    slippage_rate: float = 0.0005,
+    max_position_pct: float = 0.10,
+    max_drawdown_pct: float = 0.20,
 ) -> bool:
     """
     Run backtesting.
@@ -149,6 +154,11 @@ def run_backtest(
         strategy: Strategy name
         start_date: Optional start date filter
         end_date: Optional end date filter
+        cost_model: Cost model type (fixed, volume, zero)
+        fee_rate: Fee rate as decimal (0.001 = 0.1%)
+        slippage_rate: Slippage rate for fixed model
+        max_position_pct: Maximum position as % of capital
+        max_drawdown_pct: Maximum drawdown limit
 
     Returns:
         True if successful
@@ -158,6 +168,11 @@ def run_backtest(
         "--lake", str(lake_path),
         "--symbols", ",".join(symbols),
         "--strategy", strategy,
+        "--cost-model", cost_model,
+        "--fee-rate", str(fee_rate),
+        "--slippage-rate", str(slippage_rate),
+        "--max-position-pct", str(max_position_pct),
+        "--max-drawdown-pct", str(max_drawdown_pct),
     ]
 
     if start_date:
@@ -218,6 +233,11 @@ def run_full_pipeline(
     days: int = DEFAULT_LOOKBACK_DAYS,
     skip_ingest: bool = False,
     walk_forward: bool = False,
+    cost_model: str = "fixed",
+    fee_rate: float = 0.001,
+    slippage_rate: float = 0.0005,
+    max_position_pct: float = 0.10,
+    max_drawdown_pct: float = 0.20,
 ) -> bool:
     """
     Run the full pipeline.
@@ -252,7 +272,15 @@ def run_full_pipeline(
 
     # Stage 3: Backtest
     stages_run += 1
-    if run_backtest(symbols, walk_forward=walk_forward):
+    if run_backtest(
+        symbols,
+        walk_forward=walk_forward,
+        cost_model=cost_model,
+        fee_rate=fee_rate,
+        slippage_rate=slippage_rate,
+        max_position_pct=max_position_pct,
+        max_drawdown_pct=max_drawdown_pct,
+    ):
         stages_passed += 1
     else:
         print("\n[ERROR] Backtesting failed")
@@ -340,6 +368,39 @@ Examples:
         type=str,
         help="End date filter (YYYY-MM-DD)",
     )
+    # Cost model arguments
+    parser.add_argument(
+        "--cost-model",
+        type=str,
+        choices=["fixed", "volume", "zero"],
+        default="fixed",
+        help="Cost model type (default: fixed)",
+    )
+    parser.add_argument(
+        "--fee-rate",
+        type=float,
+        default=0.001,
+        help="Fee rate as decimal, e.g., 0.001 = 0.1%% (default: 0.001)",
+    )
+    parser.add_argument(
+        "--slippage-rate",
+        type=float,
+        default=0.0005,
+        help="Slippage rate for fixed model (default: 0.0005)",
+    )
+    # Risk management arguments
+    parser.add_argument(
+        "--max-position-pct",
+        type=float,
+        default=0.10,
+        help="Max position as %% of capital (default: 0.10 = 10%%)",
+    )
+    parser.add_argument(
+        "--max-drawdown-pct",
+        type=float,
+        default=0.20,
+        help="Max drawdown limit (default: 0.20 = 20%%)",
+    )
 
     args = parser.parse_args()
 
@@ -365,6 +426,11 @@ Examples:
             days=args.days,
             skip_ingest=args.skip_ingest,
             walk_forward=args.walk_forward,
+            cost_model=args.cost_model,
+            fee_rate=args.fee_rate,
+            slippage_rate=args.slippage_rate,
+            max_position_pct=args.max_position_pct,
+            max_drawdown_pct=args.max_drawdown_pct,
         )
     else:
         for stage in stages:
@@ -380,6 +446,11 @@ Examples:
                     workers=workers,
                     start_date=args.start_date,
                     end_date=args.end_date,
+                    cost_model=args.cost_model,
+                    fee_rate=args.fee_rate,
+                    slippage_rate=args.slippage_rate,
+                    max_position_pct=args.max_position_pct,
+                    max_drawdown_pct=args.max_drawdown_pct,
                 ) and success
             elif stage == "optimize":
                 success = run_optimize(symbols, args.lake, workers=workers) and success

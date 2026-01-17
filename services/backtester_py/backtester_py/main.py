@@ -50,6 +50,16 @@ from rich.table import Table
 from rich.text import Text
 
 from backtester_py.logging_config import TRADING_THEME, configure_logging, get_logger
+from backtester_py.models import (
+    CostModel,
+    CostModelType,
+    FixedCostModel,
+    RiskChecker,
+    VolumeImpactCostModel,
+    ZeroCostModel,
+    create_cost_model,
+    create_risk_checker,
+)
 from backtester_py.visualization import (
     generate_equity_chart,
     generate_html_report,
@@ -643,6 +653,65 @@ def parse_args() -> argparse.Namespace:
         help="JSON string of parameter grid, e.g., '{\"lookback\": [10, 20], \"threshold\": [0.01, 0.02]}'",
     )
 
+    # Cost model arguments
+    parser.add_argument(
+        "--cost-model",
+        type=str,
+        choices=["fixed", "volume", "zero"],
+        default="fixed",
+        help="Cost model type (default: fixed)",
+    )
+    parser.add_argument(
+        "--fee-rate",
+        type=float,
+        default=0.001,
+        help="Fee rate as decimal (0.001 = 0.1%%, default: 0.001)",
+    )
+    parser.add_argument(
+        "--slippage-rate",
+        type=float,
+        default=0.0005,
+        help="Slippage rate as decimal (0.0005 = 0.05%%, default: 0.0005)",
+    )
+    parser.add_argument(
+        "--spread-coef",
+        type=float,
+        default=1.0,
+        help="Spread coefficient for volume cost model (default: 1.0)",
+    )
+    parser.add_argument(
+        "--size-coef",
+        type=float,
+        default=1.0,
+        help="Size coefficient for volume cost model (default: 1.0)",
+    )
+    parser.add_argument(
+        "--vol-coef",
+        type=float,
+        default=1.0,
+        help="Volatility coefficient for volume cost model (default: 1.0)",
+    )
+
+    # Risk checker arguments
+    parser.add_argument(
+        "--max-position-pct",
+        type=float,
+        default=0.10,
+        help="Maximum position as %% of capital (0.10 = 10%%, default: 0.10)",
+    )
+    parser.add_argument(
+        "--max-drawdown-pct",
+        type=float,
+        default=0.20,
+        help="Maximum drawdown as %% of peak equity (0.20 = 20%%, default: 0.20)",
+    )
+    parser.add_argument(
+        "--max-gross-pct",
+        type=float,
+        default=1.0,
+        help="Maximum gross exposure as %% of capital (1.0 = 100%%, default: 1.0)",
+    )
+
     return parser.parse_args()
 
 
@@ -1067,15 +1136,30 @@ def run_grid_search_mode(
     return 0
 
 
+import warnings
+
+
 class MockCostModel:
     """
-    Simple cost model for demo/testing purposes.
+    DEPRECATED: Simple cost model for demo/testing purposes.
+
+    Use backtester_py.models.FixedCostModel or backtester_py.models.VolumeImpactCostModel instead.
+
+    This class is kept for backward compatibility with multiprocessing pickling,
+    but will be removed in a future version.
 
     Picklable (module-level) for multiprocessing compatibility.
-    In production, replace with actual cost models from your codebase.
     """
 
     fixed_cost_bps = 1.0
+
+    def __init__(self) -> None:
+        warnings.warn(
+            "MockCostModel is deprecated. Use backtester_py.models.FixedCostModel or "
+            "backtester_py.models.create_cost_model() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     def calculate_fill_price(
         self,
@@ -1095,11 +1179,31 @@ class MockCostModel:
 
 class MockRiskChecker:
     """
-    Pass-through risk checker for demo/testing purposes.
+    DEPRECATED: Pass-through risk checker for demo/testing purposes.
+
+    Use backtester_py.models.RiskChecker or backtester_py.models.create_risk_checker() instead.
+
+    This class is kept for backward compatibility with multiprocessing pickling,
+    but will be removed in a future version.
 
     Picklable (module-level) for multiprocessing compatibility.
-    In production, replace with actual risk models from your codebase.
     """
+
+    def __init__(
+        self,
+        max_position_pct: float = 0.10,
+        max_gross_exposure: float = 1_000_000.0,
+        max_drawdown_pct: float = 0.20,
+    ) -> None:
+        warnings.warn(
+            "MockRiskChecker is deprecated. Use backtester_py.models.RiskChecker or "
+            "backtester_py.models.create_risk_checker() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.max_position_pct = max_position_pct
+        self.max_gross_exposure = max_gross_exposure
+        self.max_drawdown_pct = max_drawdown_pct
 
     def check_order(
         self,
@@ -1192,15 +1296,43 @@ def main() -> int:
             console.print("[dim]  --data market.parquet           Load from single file[/dim]")
             return 1
 
-        # Create minimal cost/risk models for demo
-        # In real usage, these would be injected from configuration
+        # Create cost and risk models from CLI arguments
         from backtester_py.engine import BacktestConfig, BacktestEngine
 
-        # Use module-level mock models (picklable for multiprocessing)
+        # Create cost model based on CLI args
+        cost_model = create_cost_model(
+            model_type=args.cost_model,
+            fee_rate=args.fee_rate,
+            slippage_rate=args.slippage_rate,
+            spread_coef=args.spread_coef,
+            size_coef=args.size_coef,
+            vol_coef=args.vol_coef,
+        )
+
+        # Log cost model configuration
+        console.print(f"[dim]Cost model: {args.cost_model}[/dim]")
+        if args.cost_model != "zero":
+            console.print(f"[dim]  Fee rate: {args.fee_rate:.4%}[/dim]")
+            if args.cost_model == "fixed":
+                console.print(f"[dim]  Slippage rate: {args.slippage_rate:.4%}[/dim]")
+            elif args.cost_model == "volume":
+                console.print(f"[dim]  Spread coef: {args.spread_coef}, Size coef: {args.size_coef}, Vol coef: {args.vol_coef}[/dim]")
+
+        # Create risk checker from CLI args
+        risk_checker = create_risk_checker(
+            max_position_pct=args.max_position_pct,
+            max_gross_exposure=config.initial_capital * args.max_gross_pct,
+            max_drawdown_pct=args.max_drawdown_pct,
+            initial_capital=config.initial_capital,
+        )
+
+        # Log risk configuration
+        console.print(f"[dim]Risk limits: Position {args.max_position_pct:.0%}, Gross {args.max_gross_pct:.0%}, Drawdown {args.max_drawdown_pct:.0%}[/dim]\n")
+
         backtest_config = BacktestConfig(
             initial_capital=config.initial_capital,
-            cost_model=MockCostModel(),  # type: ignore
-            risk_checker=MockRiskChecker(),  # type: ignore
+            cost_model=cost_model,  # type: ignore[arg-type]
+            risk_checker=risk_checker,  # type: ignore[arg-type]
         )
 
         engine = BacktestEngine(backtest_config)
